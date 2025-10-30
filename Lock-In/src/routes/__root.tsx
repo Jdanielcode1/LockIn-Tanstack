@@ -80,7 +80,9 @@ function RootComponent() {
           </div>
         </div>
       </nav>
-      <Outlet />
+      <React.Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
+        <Outlet />
+      </React.Suspense>
     </RootDocument>
   )
 }

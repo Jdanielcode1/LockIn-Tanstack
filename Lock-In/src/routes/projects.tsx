@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate, Outlet, useMatches } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useMutation } from 'convex/react'
@@ -6,18 +6,51 @@ import { api } from '../../convex/_generated/api'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/projects')({
-  component: Projects,
+  component: ProjectsLayout,
 })
 
-function Projects() {
+function ProjectsLayout() {
+  const matches = useMatches()
+  const isDetailRoute = matches.some(match => match.routeId === '/projects/$projectId')
+  
+  // If we're on a detail route, just render the outlet
+  if (isDetailRoute) {
+    return <Outlet />
+  }
+  
+  // Otherwise render the projects list
+  return <ProjectsList />
+}
+
+function ProjectsList() {
   const [cursor, setCursor] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const navigate = useNavigate()
 
   const { data: projectsData } = useSuspenseQuery(
     convexQuery(api.projects.list, {
       paginationOpts: { numItems: 10, cursor: cursor },
     })
   )
+
+  const handleProjectClick = (projectId: string) => {
+    console.log('🔍 Attempting to navigate to project:', projectId)
+    console.log('Current URL:', window.location.href)
+    try {
+      navigate({ 
+        to: '/projects/$projectId', 
+        params: { projectId } 
+      })
+      console.log('✅ Navigation call succeeded')
+      
+      // Check URL after navigation attempt
+      setTimeout(() => {
+        console.log('URL after navigation:', window.location.href)
+      }, 100)
+    } catch (error) {
+      console.error('❌ Navigation error:', error)
+    }
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -53,62 +86,66 @@ function Projects() {
           <>
             <div className="space-y-4">
               {projectsData.page.map((project) => (
-                <Link
+                <div
                   key={project._id}
-                  to="/projects/$projectId"
-                  params={{ projectId: project._id }}
-                  className="block"
+                  className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition"
                 >
-                  <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2 hover:text-blue-600 transition">
-                          {project.title}
-                        </h3>
-                        <p className="text-gray-600 mb-4">
-                          {project.description}
-                        </p>
-                      </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                          project.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : project.status === 'active'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {project.status}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                        {project.title}
+                      </h3>
+                      <p className="text-gray-600 mb-4">
+                        {project.description}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                        project.status === 'completed'
+                          ? 'bg-green-100 text-green-800'
+                          : project.status === 'active'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {project.status}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm text-gray-600">
+                      <span>
+                        {project.completedHours.toFixed(1)} /{' '}
+                        {project.targetHours} hours
+                      </span>
+                      <span>
+                        {Math.round(
+                          (project.completedHours / project.targetHours) * 100
+                        )}
+                        %
                       </span>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <span>
-                          {project.completedHours.toFixed(1)} /{' '}
-                          {project.targetHours} hours
-                        </span>
-                        <span>
-                          {Math.round(
-                            (project.completedHours / project.targetHours) * 100
-                          )}
-                          %
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full transition-all"
-                          style={{
-                            width: `${Math.min(
-                              (project.completedHours / project.targetHours) *
-                                100,
-                              100
-                            )}%`,
-                          }}
-                        />
-                      </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(
+                            (project.completedHours / project.targetHours) *
+                              100,
+                            100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="pt-4">
+                      <button
+                        onClick={() => handleProjectClick(project._id)}
+                        className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition font-semibold"
+                      >
+                        Open Project
+                      </button>
                     </div>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
 

@@ -15,9 +15,13 @@ function ProjectDetail() {
   const { projectId } = Route.useParams()
   const [showUploadModal, setShowUploadModal] = useState(false)
 
+  console.log('🎯 ProjectDetail component rendered with projectId:', projectId)
+
   const { data: project } = useSuspenseQuery(
     convexQuery(api.projects.get, { projectId: projectId as Id<'projects'> })
   )
+
+  console.log('📊 Project data loaded:', project)
 
   const { data: timelapses } = useSuspenseQuery(
     convexQuery(api.timelapses.listByProject, {
