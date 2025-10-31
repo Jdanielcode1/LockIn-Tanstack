@@ -11,7 +11,7 @@ interface InlineVideoPlayerProps {
 
 export function InlineVideoPlayer({ videoKey, isPlaying, onTogglePlay }: InlineVideoPlayerProps) {
   const { data: videoUrl } = useSuspenseQuery(
-    convexQuery(api.videos.getVideoUrl, { videoKey })
+    convexQuery(api.r2.getVideoUrl, { videoKey })
   )
 
   const videoRef = useRef<HTMLVideoElement>(null)

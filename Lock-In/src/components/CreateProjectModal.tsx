@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
+import { useUser } from './UserProvider'
 
 interface CreateProjectModalProps {
   onClose: () => void
 }
 
 export function CreateProjectModal({ onClose }: CreateProjectModalProps) {
+  const { user } = useUser()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [targetHours, setTargetHours] = useState('')
@@ -16,12 +18,13 @@ export function CreateProjectModal({ onClose }: CreateProjectModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title || !description || !targetHours) return
+    if (!title || !description || !targetHours || !user) return
 
     setCreating(true)
 
     try {
       await createProject({
+        userId: user.userId,
         title,
         description,
         targetHours: parseFloat(targetHours),

@@ -21,14 +21,15 @@ export const getOverallStats = query({
 
     if (args.userId) {
       // Get stats for specific user
+      const userId = args.userId; // Extract to const for type narrowing
       projects = await ctx.db
         .query("projects")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect();
       
       timelapses = await ctx.db
         .query("timelapses")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect();
     } else {
       // Get global stats
@@ -159,9 +160,10 @@ export const getContributionData = query({
 
     let timelapses;
     if (args.userId) {
+      const userId = args.userId; // Extract to const for type narrowing
       timelapses = await ctx.db
         .query("timelapses")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect();
     } else {
       timelapses = await ctx.db.query("timelapses").collect();

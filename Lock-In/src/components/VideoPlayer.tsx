@@ -9,7 +9,7 @@ interface VideoPlayerProps {
 
 export function VideoPlayer({ videoKey, className = '' }: VideoPlayerProps) {
   const { data: videoUrl } = useSuspenseQuery(
-    convexQuery(api.videos.getVideoUrl, { videoKey })
+    convexQuery(api.r2.getVideoUrl, { videoKey })
   )
 
   if (!videoUrl) {

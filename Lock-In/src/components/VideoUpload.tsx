@@ -3,6 +3,7 @@ import { useUploadFile } from '@convex-dev/r2/react'
 import { useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
+import { useUser } from './UserProvider'
 
 interface VideoUploadProps {
   projectId: Id<'projects'>
@@ -11,6 +12,7 @@ interface VideoUploadProps {
 }
 
 export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProps) {
+  const { user } = useUser()
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [durationMinutes, setDurationMinutes] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -21,19 +23,20 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!videoFile) return
+    if (!videoFile || !user) return
 
     setUploading(true)
     setProgress(10)
 
     try {
-      // Upload video to R2
+      // Upload video to R2 first
       setProgress(30)
       const videoKey = await uploadFile(videoFile)
-      setProgress(80)
+      setProgress(70)
 
       // Create timelapse record in database
       await createTimelapse({
+        userId: user.userId,
         projectId,
         videoKey,
         durationMinutes: parseFloat(durationMinutes),
