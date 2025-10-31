@@ -1,8 +1,10 @@
-import { useState } from 'react'
-import { useMutation, useQuery } from 'convex/react'
+import { useState, useRef } from 'react'
+import { useMutation, useQuery as useConvexQuery } from 'convex/react'
+import { useQuery } from '@tanstack/react-query'
+import { useUploadFile } from '@convex-dev/r2/react'
+import { convexQuery } from '@convex-dev/react-query'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
-import { AvatarUpload } from './AvatarUpload'
 
 interface UserProfileEditProps {
   userId: Id<'users'>
@@ -10,14 +12,19 @@ interface UserProfileEditProps {
 }
 
 export function UserProfileEdit({ userId, onClose }: UserProfileEditProps) {
-  const user = useQuery(api.users.getUser, { userId })
+  const user = useConvexQuery(api.users.getUser, { userId })
   const updateProfile = useMutation(api.users.updateProfile)
-  
+  const updateAvatar = useMutation(api.users.updateAvatar)
+  const uploadFile = useUploadFile(api.r2)
+
   const [displayName, setDisplayName] = useState(user?.displayName || '')
   const [bio, setBio] = useState(user?.bio || '')
   const [email, setEmail] = useState(user?.email || '')
   const [location, setLocation] = useState(user?.location || '')
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null)
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Update form when user data loads
   if (user && displayName === '' && user.displayName) {
@@ -27,9 +34,47 @@ export function UserProfileEdit({ userId, onClose }: UserProfileEditProps) {
     setLocation(user.location || '')
   }
 
+  const handleAvatarSelect = (file: File) => {
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB')
+      return
+    }
+
+    setSelectedAvatarFile(file)
+
+    // Create preview URL
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setAvatarPreviewUrl(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleAvatarSelect(file)
+    }
+  }
+
+  const handleRemoveAvatar = () => {
+    setSelectedAvatarFile(null)
+    setAvatarPreviewUrl(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!displayName.trim()) {
       alert('Display name is required')
       return
@@ -37,6 +82,13 @@ export function UserProfileEdit({ userId, onClose }: UserProfileEditProps) {
 
     setSaving(true)
     try {
+      // Upload avatar if a new one was selected
+      if (selectedAvatarFile) {
+        const avatarKey = await uploadFile(selectedAvatarFile)
+        await updateAvatar({ userId, avatarKey })
+      }
+
+      // Update profile fields
       await updateProfile({
         userId,
         displayName: displayName.trim(),
@@ -44,7 +96,7 @@ export function UserProfileEdit({ userId, onClose }: UserProfileEditProps) {
         email: email.trim() || undefined,
         location: location.trim() || undefined,
       })
-      
+
       alert('Profile updated successfully!')
       onClose()
     } catch (error) {
@@ -90,14 +142,70 @@ export function UserProfileEdit({ userId, onClose }: UserProfileEditProps) {
             <label className="block text-sm font-medium text-[#c9d1d9] mb-3">
               Avatar
             </label>
-            <AvatarUpload
-              userId={userId}
-              currentAvatarKey={user.avatarKey}
-              onUploadComplete={() => {
-                // Avatar upload component handles the update
-                console.log('Avatar uploaded')
-              }}
-            />
+            <div className="flex items-center gap-6">
+              {/* Avatar Preview */}
+              <div className="relative">
+                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-[#30363d] bg-[#0d1117]">
+                  {avatarPreviewUrl ? (
+                    <img
+                      src={avatarPreviewUrl}
+                      alt="Avatar preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : user.avatarKey ? (
+                    <ProfileAvatar avatarKey={user.avatarKey} displayName={user.displayName} />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold">
+                      {user.displayName
+                        .split(' ')
+                        .map(word => word[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2)}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Upload Controls */}
+              <div className="flex-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileInputChange}
+                  className="hidden"
+                />
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-[#21262d] border border-[#30363d] text-[#c9d1d9] px-4 py-2 rounded-md hover:bg-[#30363d] transition text-sm font-medium"
+                  >
+                    Choose Image
+                  </button>
+                  {selectedAvatarFile && (
+                    <>
+                      <p className="text-xs text-[#8b949e]">
+                        Selected: {selectedAvatarFile.name} ({(selectedAvatarFile.size / 1024).toFixed(1)} KB)
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleRemoveAvatar}
+                        className="text-xs text-[#f85149] hover:underline"
+                      >
+                        Remove selected image
+                      </button>
+                    </>
+                  )}
+                  {!selectedAvatarFile && (
+                    <p className="text-xs text-[#8b949e]">
+                      JPG, PNG, GIF or WebP • Max 5MB
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Username (Read-only) */}
@@ -190,7 +298,7 @@ export function UserProfileEdit({ userId, onClose }: UserProfileEditProps) {
               disabled={saving}
               className="flex-1 bg-[#238636] hover:bg-[#2ea043] text-white py-2 px-4 rounded-md transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? (selectedAvatarFile ? 'Uploading & Saving...' : 'Saving...') : 'Save Changes'}
             </button>
             <button
               type="button"
@@ -204,6 +312,34 @@ export function UserProfileEdit({ userId, onClose }: UserProfileEditProps) {
         </form>
       </div>
     </div>
+  )
+}
+
+// Helper component to display current avatar from R2
+function ProfileAvatar({ avatarKey, displayName }: { avatarKey: string; displayName: string }) {
+  const { data: avatarUrl } = useQuery({
+    ...convexQuery(api.r2.getAvatarUrl, { avatarKey }),
+  })
+
+  if (!avatarUrl) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold">
+        {displayName
+          .split(' ')
+          .map(word => word[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2)}
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={avatarUrl}
+      alt={`${displayName}'s avatar`}
+      className="w-full h-full object-cover"
+    />
   )
 }
 

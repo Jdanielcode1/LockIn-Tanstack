@@ -1,10 +1,13 @@
 import { createFileRoute, useNavigate, Outlet, useMatches } from '@tanstack/react-router'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery, useQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { api } from '../../convex/_generated/api'
 import { useState } from 'react'
 import { ContributionHeatmap } from '../components/ContributionHeatmap'
 import { CreateProjectModal } from '../components/CreateProjectModal'
+import { Avatar } from '../components/Avatar'
+import { UserProfileEdit } from '../components/UserProfileEdit'
+import { useUser } from '../components/UserProvider'
 
 export const Route = createFileRoute('/projects')({
   loader: async (opts) => {
@@ -44,8 +47,17 @@ function ProjectsLayout() {
 
 function ProjectsList() {
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditProfile, setShowEditProfile] = useState(false)
   const navigate = useNavigate()
   const currentYear = new Date().getFullYear()
+  const { user } = useUser()
+
+  const { data: profileData } = useQuery({
+    ...convexQuery(api.users.getUser, {
+      userId: user?.userId!,
+    }),
+    enabled: !!user,
+  })
 
   const { data: projectsData } = useSuspenseQuery(
     convexQuery(api.projects.list, {
@@ -80,58 +92,45 @@ function ProjectsList() {
           <aside className="lg:sticky lg:top-8 lg:self-start">
             {/* Avatar */}
             <div className="mb-4">
-              <div className="w-[296px] h-[296px] rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-8xl font-bold border-2 border-[#30363d]">
-                TC
-              </div>
+              <ProfileAvatar profileData={profileData} />
             </div>
 
             {/* Name and Username */}
             <div className="mb-4">
               <h1 className="text-2xl font-semibold text-[#c9d1d9] mb-1">
-                Timelapse Creator
+                {profileData?.displayName || 'Loading...'}
               </h1>
               <p className="text-xl text-[#8b949e] font-light">
-                JdanielCode1
+                {profileData?.username || ''}
               </p>
             </div>
 
             {/* Edit Profile Button */}
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => setShowEditProfile(true)}
               className="w-full bg-[#21262d] border border-[#30363d] text-[#c9d1d9] px-4 py-2 rounded-md hover:bg-[#30363d] transition text-sm font-medium mb-4"
             >
               Edit profile
             </button>
 
             {/* Bio */}
-            <div className="mb-4">
-              <p className="text-base text-[#c9d1d9] mb-3">
-                pushing to main
-              </p>
-              <p className="text-sm text-[#8b949e]">
-                Building projects and sharing progress through timelapses
-              </p>
-            </div>
-
-            {/* Followers */}
-            <div className="flex items-center gap-1 text-sm text-[#8b949e] mb-4">
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.493 3.493 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Z"/>
-                </svg>
-                <span className="font-semibold text-[#c9d1d9]">3</span> followers
-              </span>
-              <span>·</span>
-              <span><span className="font-semibold text-[#c9d1d9]">12</span> following</span>
-            </div>
+            {profileData?.bio && (
+              <div className="mb-4">
+                <p className="text-base text-[#c9d1d9] whitespace-pre-wrap">
+                  {profileData.bio}
+                </p>
+              </div>
+            )}
 
             {/* Location */}
-            <div className="flex items-center gap-2 text-sm text-[#8b949e] mb-4">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-                <path d="m12.166 8.94-.93 1.465A3.5 3.5 0 0 1 8.5 12.023V13a.75.75 0 0 1-1.5 0v-.977a3.5 3.5 0 0 1-2.736-1.618l-.93-1.465a.75.75 0 0 1 1.192-.786l.93 1.465a2 2 0 0 0 3.088 0l.93-1.465a.75.75 0 1 1 1.192.786ZM8 7a2 2 0 1 1-.001-3.999A2 2 0 0 1 8 7Z"/>
-              </svg>
-              <span>Berkeley</span>
-            </div>
+            {profileData?.location && (
+              <div className="flex items-center gap-2 text-sm text-[#8b949e] mb-4">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="m12.166 8.94-.93 1.465A3.5 3.5 0 0 1 8.5 12.023V13a.75.75 0 0 1-1.5 0v-.977a3.5 3.5 0 0 1-2.736-1.618l-.93-1.465a.75.75 0 0 1 1.192-.786l.93 1.465a2 2 0 0 0 3.088 0l.93-1.465a.75.75 0 1 1 1.192.786ZM8 7a2 2 0 1 1-.001-3.999A2 2 0 0 1 8 7Z"/>
+                </svg>
+                <span>{profileData.location}</span>
+              </div>
+            )}
 
             {/* Stats - Compact */}
             <div className="border-t border-[#30363d] pt-4 space-y-2 text-sm">
@@ -282,7 +281,59 @@ function ProjectsList() {
         {showCreateModal && (
           <CreateProjectModal onClose={() => setShowCreateModal(false)} />
         )}
+
+        {showEditProfile && user && (
+          <UserProfileEdit
+            userId={user.userId}
+            onClose={() => {
+              setShowEditProfile(false)
+              // Refresh will happen automatically via Convex reactivity
+            }}
+          />
+        )}
       </div>
     </main>
+  )
+}
+
+// Helper component for large profile avatar
+function ProfileAvatar({ profileData }: { profileData: any }) {
+  const { data: avatarUrl } = useQuery({
+    ...convexQuery(api.r2.getAvatarUrl, {
+      avatarKey: profileData?.avatarKey || '',
+    }),
+    enabled: !!profileData?.avatarKey,
+  })
+
+  if (!profileData) {
+    return (
+      <div className="w-[296px] h-[296px] rounded-full bg-[#161b22] border-2 border-[#30363d] flex items-center justify-center">
+        <div className="animate-spin text-4xl text-[#8b949e]">⏳</div>
+      </div>
+    )
+  }
+
+  if (profileData.avatarKey && avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={`${profileData.displayName}'s avatar`}
+        className="w-[296px] h-[296px] rounded-full object-cover border-2 border-[#30363d]"
+      />
+    )
+  }
+
+  // Fallback to initials
+  const initials = profileData.displayName
+    .split(' ')
+    .map((word: string) => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+
+  return (
+    <div className="w-[296px] h-[296px] rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-8xl font-bold border-2 border-[#30363d]">
+      {initials}
+    </div>
   )
 }

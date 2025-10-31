@@ -11,6 +11,7 @@ import { InlineVideoPlayer } from '../components/InlineVideoPlayer'
 import { InlineComments } from '../components/InlineComments'
 import { QuickActionButton } from '../components/QuickActionButton'
 import { useUser } from '../components/UserProvider'
+import { Avatar } from '../components/Avatar'
 
 export const Route = createFileRoute('/')({
   loader: async (opts) => {
@@ -45,6 +46,14 @@ function Feed() {
   const { data: stats } = useSuspenseQuery(
     convexQuery(api.stats.getOverallStats, {})
   )
+
+  // Fetch user profile data
+  const { data: profileData } = useQuery({
+    ...convexQuery(api.users.getUser, {
+      userId: user?.userId!,
+    }),
+    enabled: !!user,
+  })
 
   // Use regular useQuery for projects since it's conditional on user existing
   const { data: myProjectsData } = useQuery({
@@ -194,10 +203,21 @@ function Feed() {
               {/* Profile Card */}
               <div className="bg-[#161b22] border border-[#30363d] rounded-md p-4">
                 <div className="flex flex-col items-center mb-4">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold mb-3">
-                    TC
-                  </div>
-                  <h2 className="text-lg font-semibold text-[#c9d1d9]">Timelapse Creator</h2>
+                  {profileData ? (
+                    <Avatar
+                      avatarKey={profileData.avatarKey}
+                      displayName={profileData.displayName}
+                      size="xl"
+                      className="mb-3"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-[#161b22] border-2 border-[#30363d] flex items-center justify-center mb-3">
+                      <div className="animate-spin text-2xl text-[#8b949e]">⏳</div>
+                    </div>
+                  )}
+                  <h2 className="text-lg font-semibold text-[#c9d1d9]">
+                    {profileData?.displayName || 'Loading...'}
+                  </h2>
                   <Link to="/projects" className="text-sm text-[#8b949e] hover:text-[#58a6ff] transition">
                     View Profile
                   </Link>
@@ -398,13 +418,15 @@ function Feed() {
                     >
                       {/* Activity Header */}
                       <div className="p-4 flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold flex-shrink-0">
-                          TC
-                        </div>
+                        <Avatar
+                          avatarKey={timelapse.user.avatarKey}
+                          displayName={timelapse.user.displayName}
+                          size="md"
+                        />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-[#c9d1d9] font-semibold text-sm">
-                              Timelapse Creator
+                              {timelapse.user.displayName}
                             </span>
                             <span className="text-[#8b949e] text-xs">·</span>
                             <span className="text-[#8b949e] text-xs">
