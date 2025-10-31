@@ -64,13 +64,27 @@ function RootComponent() {
                 <span className="text-xl">📹</span>
                 Lock-In
               </Link>
-              <div className="flex gap-4">
+              <div className="flex gap-6">
                 <Link
                   to="/"
                   className="hover:text-white transition text-sm"
                   activeProps={{ className: 'text-white font-semibold' }}
                 >
                   Feed
+                </Link>
+                <Link
+                  to="/leaderboard"
+                  className="hover:text-white transition text-sm"
+                  activeProps={{ className: 'text-white font-semibold' }}
+                >
+                  Leaderboard
+                </Link>
+                <Link
+                  to="/challenges"
+                  className="hover:text-white transition text-sm"
+                  activeProps={{ className: 'text-white font-semibold' }}
+                >
+                  Challenges
                 </Link>
                 <Link
                   to="/projects"

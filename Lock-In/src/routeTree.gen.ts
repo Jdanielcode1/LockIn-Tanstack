@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as LeaderboardRouteImport } from './routes/leaderboard'
+import { Route as ChallengesRouteImport } from './routes/challenges'
 import { Route as AnotherPageRouteImport } from './routes/anotherPage'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TimelapseTimelapseIdRouteImport } from './routes/timelapse.$timelapseId'
@@ -18,6 +20,16 @@ import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projec
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeaderboardRoute = LeaderboardRouteImport.update({
+  id: '/leaderboard',
+  path: '/leaderboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChallengesRoute = ChallengesRouteImport.update({
+  id: '/challenges',
+  path: '/challenges',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnotherPageRoute = AnotherPageRouteImport.update({
@@ -44,6 +56,8 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
+  '/challenges': typeof ChallengesRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -51,6 +65,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
+  '/challenges': typeof ChallengesRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -59,6 +75,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
+  '/challenges': typeof ChallengesRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -68,6 +86,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/anotherPage'
+    | '/challenges'
+    | '/leaderboard'
     | '/projects'
     | '/projects/$projectId'
     | '/timelapse/$timelapseId'
@@ -75,6 +95,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/anotherPage'
+    | '/challenges'
+    | '/leaderboard'
     | '/projects'
     | '/projects/$projectId'
     | '/timelapse/$timelapseId'
@@ -82,6 +104,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/anotherPage'
+    | '/challenges'
+    | '/leaderboard'
     | '/projects'
     | '/projects/$projectId'
     | '/timelapse/$timelapseId'
@@ -90,6 +114,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnotherPageRoute: typeof AnotherPageRoute
+  ChallengesRoute: typeof ChallengesRoute
+  LeaderboardRoute: typeof LeaderboardRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   TimelapseTimelapseIdRoute: typeof TimelapseTimelapseIdRoute
 }
@@ -101,6 +127,20 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leaderboard': {
+      id: '/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof LeaderboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/challenges': {
+      id: '/challenges'
+      path: '/challenges'
+      fullPath: '/challenges'
+      preLoaderRoute: typeof ChallengesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/anotherPage': {
@@ -149,6 +189,8 @@ const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnotherPageRoute: AnotherPageRoute,
+  ChallengesRoute: ChallengesRoute,
+  LeaderboardRoute: LeaderboardRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   TimelapseTimelapseIdRoute: TimelapseTimelapseIdRoute,
 }

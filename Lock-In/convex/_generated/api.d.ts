@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as challenges from "../challenges.js";
+import type * as leaderboard from "../leaderboard.js";
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
 import type * as social from "../social.js";
@@ -30,6 +32,8 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  challenges: typeof challenges;
+  leaderboard: typeof leaderboard;
   projects: typeof projects;
   r2: typeof r2;
   social: typeof social;

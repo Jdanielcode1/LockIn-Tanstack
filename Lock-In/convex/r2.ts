@@ -36,8 +36,11 @@ export const getAvatarUrl = query({
   args: {
     avatarKey: v.string(),
   },
-  returns: v.string(),
+  returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
+    if (!args.avatarKey || args.avatarKey.trim() === '') {
+      return null;
+    }
     return await r2.getUrl(args.avatarKey, {
       expiresIn: 60 * 60 * 24 * 7, // 7 days (avatars change less frequently)
     });

@@ -59,4 +59,32 @@ export default defineSchema({
   })
     .index("by_timelapse", ["timelapseId"])
     .index("by_user", ["userId"]),
+
+  challenges: defineTable({
+    creatorId: v.id("users"),
+    title: v.string(),
+    description: v.string(),
+    type: v.union(
+      v.literal("reading"),
+      v.literal("study"),
+      v.literal("workout"),
+      v.literal("custom")
+    ),
+    goal: v.optional(v.string()), // e.g., "100 hours", "Read 5 books"
+    startDate: v.number(),
+    endDate: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_creator", ["creatorId"])
+    .index("by_dates", ["startDate", "endDate"]),
+
+  challengeParticipants: defineTable({
+    challengeId: v.id("challenges"),
+    userId: v.id("users"),
+    joinedAt: v.number(),
+    progress: v.optional(v.number()), // For tracking progress (e.g., hours completed)
+  })
+    .index("by_challenge", ["challengeId"])
+    .index("by_user", ["userId"])
+    .index("by_challenge_and_user", ["challengeId", "userId"]),
 });
