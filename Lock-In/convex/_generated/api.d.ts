@@ -11,6 +11,7 @@
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
 import type * as social from "../social.js";
+import type * as stats from "../stats.js";
 import type * as timelapses from "../timelapses.js";
 import type * as videos from "../videos.js";
 
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   projects: typeof projects;
   r2: typeof r2;
   social: typeof social;
+  stats: typeof stats;
   timelapses: typeof timelapses;
   videos: typeof videos;
 }>;

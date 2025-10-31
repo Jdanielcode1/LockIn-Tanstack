@@ -55,32 +55,40 @@ export const Route = createRootRouteWithContext<{
 function RootComponent() {
   return (
     <RootDocument>
-      <nav className="bg-slate-900 text-white shadow-lg">
-        <div className="container mx-auto px-4 py-4">
+      <nav className="bg-[#161b22] border-b border-[#30363d] text-[#c9d1d9]">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <Link to="/" className="text-2xl font-bold hover:text-blue-400 transition">
+            <Link to="/" className="text-base font-semibold hover:text-white transition flex items-center gap-2">
+              <span className="text-xl">📹</span>
               Timelapse Social
             </Link>
-            <div className="flex gap-6">
+            <div className="flex gap-4">
               <Link
                 to="/"
-                className="hover:text-blue-400 transition"
-                activeProps={{ className: 'text-blue-400' }}
+                className="hover:text-white transition text-sm"
+                activeProps={{ className: 'text-white font-semibold' }}
               >
                 Feed
               </Link>
               <Link
                 to="/projects"
-                className="hover:text-blue-400 transition"
-                activeProps={{ className: 'text-blue-400' }}
+                className="hover:text-white transition text-sm"
+                activeProps={{ className: 'text-white font-semibold' }}
               >
-                Projects
+                Profile
               </Link>
             </div>
           </div>
         </div>
       </nav>
-      <React.Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
+      <React.Suspense fallback={
+        <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
+          <div className="text-[#8b949e] text-center">
+            <div className="animate-spin text-4xl mb-4">⏳</div>
+            <p>Loading...</p>
+          </div>
+        </div>
+      }>
         <Outlet />
       </React.Suspense>
     </RootDocument>
@@ -89,11 +97,11 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html>
+    <html className="bg-[#0d1117]">
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="bg-[#0d1117]">
         {children}
         <Scripts />
       </body>

@@ -18,21 +18,21 @@ function Feed() {
   )
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-gray-900">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Timelapse Feed
+          <h1 className="text-4xl font-bold text-white mb-2">
+            Community Feed
           </h1>
-          <p className="text-gray-600">
-            Discover amazing project progress from the community
+          <p className="text-gray-400">
+            Discover amazing project progress from creators around the world
           </p>
         </div>
 
         {feedData.page.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-gray-400 text-6xl mb-4">📹</div>
-            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+          <div className="text-center py-16 bg-gray-800 border border-gray-700 rounded-lg">
+            <div className="text-gray-500 text-6xl mb-4">📹</div>
+            <h2 className="text-2xl font-semibold text-gray-300 mb-2">
               No timelapses yet
             </h2>
             <p className="text-gray-500 mb-6">
@@ -40,7 +40,7 @@ function Feed() {
             </p>
             <Link
               to="/projects"
-              className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+              className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-semibold"
             >
               Create a Project
             </Link>
@@ -55,20 +55,26 @@ function Feed() {
                   params={{ timelapseId: timelapse._id }}
                   className="group"
                 >
-                  <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition">
-                    <div className="aspect-video bg-gray-200 flex items-center justify-center">
-                      <div className="text-gray-400 text-6xl">▶️</div>
+                  <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden hover:border-gray-600 hover:shadow-xl transition">
+                    <div className="aspect-video bg-gray-900 flex items-center justify-center border-b border-gray-700">
+                      <div className="text-gray-600 text-6xl">▶️</div>
                     </div>
                     <div className="p-4">
-                      <h3 className="font-semibold text-lg mb-1 group-hover:text-blue-600 transition">
+                      <h3 className="font-semibold text-lg mb-1 text-blue-400 group-hover:text-blue-300 transition">
                         {timelapse.projectTitle}
                       </h3>
-                      <p className="text-sm text-gray-600 mb-3">
+                      <p className="text-sm text-gray-500 mb-3">
                         {timelapse.durationMinutes} minutes
                       </p>
                       <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <span>👁️ {timelapse.viewCount}</span>
-                        <span>❤️ {timelapse.likeCount}</span>
+                        <span className="flex items-center gap-1">
+                          <span>👁️</span>
+                          {timelapse.viewCount}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span>❤️</span>
+                          {timelapse.likeCount}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -80,7 +86,7 @@ function Feed() {
               <div className="text-center mt-8">
                 <button
                   onClick={() => setCursor(feedData.continueCursor)}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+                  className="bg-gray-800 border border-gray-700 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition font-semibold"
                 >
                   Load More
                 </button>
