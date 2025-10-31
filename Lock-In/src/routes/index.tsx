@@ -2,7 +2,13 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { api } from '../../convex/_generated/api'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
+import { useMutation } from 'convex/react'
+import type { Id } from '../../convex/_generated/dataModel'
+import { CreateProjectModal } from '../components/CreateProjectModal'
+import { InlineVideoPlayer } from '../components/InlineVideoPlayer'
+import { InlineComments } from '../components/InlineComments'
+import { QuickActionButton } from '../components/QuickActionButton'
 
 export const Route = createFileRoute('/')({
   loader: async (opts) => {
@@ -22,6 +28,9 @@ export const Route = createFileRoute('/')({
 
 function Feed() {
   const [cursor, setCursor] = useState<string | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [commentingOn, setCommentingOn] = useState<string | null>(null)
+  const [commentText, setCommentText] = useState('')
   
   const { data: feedData } = useSuspenseQuery(
     convexQuery(api.timelapses.listFeed, {
@@ -32,6 +41,101 @@ function Feed() {
   const { data: stats } = useSuspenseQuery(
     convexQuery(api.stats.getOverallStats, {})
   )
+
+  const [localLikes, setLocalLikes] = useState<Record<string, number>>({})
+  const [localLiked, setLocalLiked] = useState<Set<string>>(new Set())
+  const [likingInProgress, setLikingInProgress] = useState<Set<string>>(new Set())
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null)
+  const [showComments, setShowComments] = useState<string | null>(null)
+  
+  const toggleLikeMutation = useMutation(api.social.toggleLike)
+  const addCommentMutation = useMutation(api.social.addComment)
+
+  const handleLike = async (timelapseId: Id<'timelapses'>, currentLikes: number) => {
+    // Prevent double-clicking
+    if (likingInProgress.has(timelapseId)) return
+    
+    // Mark as in progress
+    setLikingInProgress(prev => new Set(prev).add(timelapseId))
+    
+    // Optimistic update
+    const wasLiked = localLiked.has(timelapseId)
+    const newLikes = wasLiked ? currentLikes - 1 : currentLikes + 1
+    
+    setLocalLikes(prev => ({ ...prev, [timelapseId]: newLikes }))
+    setLocalLiked(prev => {
+      const newSet = new Set(prev)
+      if (wasLiked) {
+        newSet.delete(timelapseId)
+      } else {
+        newSet.add(timelapseId)
+      }
+      return newSet
+    })
+    
+    try {
+      console.log('Calling toggleLike mutation...')
+      const result = await toggleLikeMutation({ timelapseId })
+      console.log('Mutation result:', result)
+      
+      // Update local state based on server response
+      if (result.liked) {
+        console.log('Video is now liked')
+        setLocalLiked(prev => new Set(prev).add(timelapseId))
+      } else {
+        console.log('Video is now unliked')
+        setLocalLiked(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(timelapseId)
+          return newSet
+        })
+      }
+    } catch (error) {
+      // Revert on error
+      setLocalLikes(prev => ({ ...prev, [timelapseId]: currentLikes }))
+      setLocalLiked(prev => {
+        const newSet = new Set(prev)
+        if (wasLiked) {
+          newSet.add(timelapseId)
+        } else {
+          newSet.delete(timelapseId)
+        }
+        return newSet
+      })
+      console.error('Error toggling like:', error)
+      alert('Failed to update like. Please try again.')
+    } finally {
+      // Remove from in-progress
+      setLikingInProgress(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(timelapseId)
+        return newSet
+      })
+    }
+  }
+
+  const handleComment = async (timelapseId: Id<'timelapses'>) => {
+    if (!commentText.trim()) return
+    
+    try {
+      await addCommentMutation({ 
+        timelapseId, 
+        content: commentText 
+      })
+      setCommentText('')
+      setCommentingOn(null)
+    } catch (error) {
+      console.error('Error commenting:', error)
+    }
+  }
+
+  const getLikeCount = (timelapseId: string, originalCount: number) => {
+    return localLikes[timelapseId] ?? originalCount
+  }
+
+  const isLiked = (timelapseId: string) => {
+    return localLiked.has(timelapseId)
+  }
 
   const getRelativeTime = (timestamp: number) => {
     const now = Date.now()
@@ -186,145 +290,225 @@ function Feed() {
               </div>
 
               {/* Quick Actions */}
-              <Link
-                to="/projects"
-                className="block bg-[#238636] hover:bg-[#2ea043] text-white text-center py-2 rounded-md transition text-sm font-medium"
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="block w-full bg-[#238636] hover:bg-[#2ea043] text-white text-center py-2 rounded-md transition text-sm font-medium"
               >
                 + New Project
-              </Link>
+              </button>
             </div>
           </aside>
 
           {/* Main Feed */}
-          <div>
-        {feedData.page.length === 0 ? (
-          <div className="text-center py-16 bg-[#161b22] border border-[#30363d] rounded-md">
-            <div className="text-[#8b949e] text-6xl mb-4">📹</div>
-            <h2 className="text-2xl font-semibold text-[#c9d1d9] mb-2">
-              No activities yet
-            </h2>
-            <p className="text-[#8b949e] mb-6 text-sm">
-              Be the first to share your project progress!
-            </p>
-            <Link
-              to="/projects"
-              className="inline-block bg-[#238636] text-white px-4 py-2 rounded-md hover:bg-[#2ea043] transition text-sm font-medium"
-            >
-              Create a Project
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-4">
-              {feedData.page.map((timelapse) => (
-                <article
-                  key={timelapse._id}
-                  className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden hover:border-[#8b949e] transition"
-                >
-                  {/* Activity Header */}
-                  <div className="p-4 flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold flex-shrink-0">
-                      TC
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[#c9d1d9] font-semibold text-sm">
-                          Timelapse Creator
-                        </span>
-                        <span className="text-[#8b949e] text-xs">·</span>
-                        <span className="text-[#8b949e] text-xs">
-                          {getRelativeTime(timelapse.uploadedAt)}
-                        </span>
-                      </div>
-                      <Link
-                        to="/timelapse/$timelapseId"
-                        params={{ timelapseId: timelapse._id }}
-                        className="text-[#c9d1d9] font-semibold hover:text-[#58a6ff] transition"
-                      >
-                        {timelapse.projectTitle}
-                      </Link>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-[#8b949e]">
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0Z"/>
-                          </svg>
-                          {timelapse.durationMinutes} min
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 0a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 6.293V.5A.5.5 0 0 1 8 0Z"/>
-                            <path d="M3 7.5a.5.5 0 0 1 .5.5v5.5h9V8a.5.5 0 0 1 1 0v6a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 2 14V8a.5.5 0 0 1 .5-.5Z"/>
-                          </svg>
-                          Video Upload
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0ZM2.04 4.326c.325 1.329 2.532 2.54 3.717 3.19.48.263.793.434.743.484-.08.08-.162.158-.242.234-.416.396-.787.749-.758 1.266.035.634.618.824 1.214 1.017.577.188 1.168.38 1.286.983.082.417-.075.988-.22 1.52-.215.782-.406 1.48.22 1.48 1.5-.5 3.798-3.186 4-5 .138-1.243-2-2-3.5-2.5-.478-.16-.755.081-.99.284-.172.15-.322.279-.51.216-.445-.148-2.5-2-1.5-2.5.78-.39.952-.171 1.227.182.078.099.163.208.273.318.609.304.662-.132.723-.633.039-.322.081-.671.277-.867.434-.434 1.265-.791 2.028-1.12.712-.306 1.365-.587 1.579-.88A7 7 0 1 1 2.04 4.327Z"/>
-                          </svg>
-                          {new Date(timelapse.uploadedAt).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Video Preview */}
-                  <Link
-                    to="/timelapse/$timelapseId"
-                    params={{ timelapseId: timelapse._id }}
-                  >
-                    <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d] hover:bg-[#161b22] transition">
-                      <svg className="w-16 h-16 text-[#8b949e]" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
-                        <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm15 0a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/>
-                      </svg>
-                    </div>
-                  </Link>
-
-                  {/* Interaction Footer */}
-                  <div className="p-4">
-                    <div className="flex items-center gap-4 text-sm">
-                      <button className="flex items-center gap-1.5 text-[#8b949e] hover:text-[#f85149] transition">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-                          <path d="m8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002ZM4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.58 20.58 0 0 0 8 13.393a20.58 20.58 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z"/>
-                        </svg>
-                        <span>{timelapse.likeCount}</span>
-                      </button>
-                      <button className="flex items-center gap-1.5 text-[#8b949e] hover:text-[#58a6ff] transition">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-                          <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h11A1.5 1.5 0 0 1 15 3.5v8a1.5 1.5 0 0 1-1.5 1.5h-3.25a.75.75 0 0 0-.53.22L8 15.44l-1.72-1.72a.75.75 0 0 0-.53-.22H2.5A1.5 1.5 0 0 1 1 11.5v-8Zm1.5-.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h3.5c.28 0 .549.11.75.31L8 13.56l1.75-1.75c.2-.2.47-.31.75-.31h3.5a.5.5 0 0 0 .5-.5v-8a.5.5 0 0 0-.5-.5h-11Z"/>
-                        </svg>
-                        <span>0</span>
-                      </button>
-                      <div className="flex items-center gap-1.5 text-[#8b949e] ml-auto">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-                          <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z"/>
-                          <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0Z"/>
-                        </svg>
-                        <span>{timelapse.viewCount}</span>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            {!feedData.isDone && (
-              <div className="text-center mt-6">
+          <div className="max-w-[680px] mx-auto">
+            {feedData.page.length === 0 ? (
+              <div className="text-center py-16 bg-[#161b22] border border-[#30363d] rounded-md">
+                <div className="text-[#8b949e] text-6xl mb-4">📹</div>
+                <h2 className="text-2xl font-semibold text-[#c9d1d9] mb-2">
+                  No activities yet
+                </h2>
+                <p className="text-[#8b949e] mb-6 text-sm">
+                  Be the first to share your project progress!
+                </p>
                 <button
-                  onClick={() => setCursor(feedData.continueCursor)}
-                  className="bg-[#21262d] border border-[#30363d] text-[#c9d1d9] px-4 py-2 rounded-md hover:bg-[#30363d] transition text-sm font-medium"
+                  onClick={() => setShowCreateModal(true)}
+                  className="inline-block bg-[#238636] text-white px-4 py-2 rounded-md hover:bg-[#2ea043] transition text-sm font-medium"
                 >
-                  Show more activities
+                  Create a Project
                 </button>
               </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {feedData.page.map((timelapse) => (
+                    <article
+                      key={timelapse._id}
+                      className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden hover:border-[#8b949e] transition"
+                    >
+                      {/* Activity Header */}
+                      <div className="p-4 flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+                          TC
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[#c9d1d9] font-semibold text-sm">
+                              Timelapse Creator
+                            </span>
+                            <span className="text-[#8b949e] text-xs">·</span>
+                            <span className="text-[#8b949e] text-xs">
+                              {getRelativeTime(timelapse.uploadedAt)}
+                            </span>
+                          </div>
+                          <Link
+                            to="/timelapse/$timelapseId"
+                            params={{ timelapseId: timelapse._id }}
+                            className="text-[#c9d1d9] font-semibold hover:text-[#58a6ff] transition"
+                          >
+                            {timelapse.projectTitle}
+                          </Link>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-[#8b949e]">
+                            <span className="flex items-center gap-1">
+                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0Z"/>
+                              </svg>
+                              {timelapse.durationMinutes} min
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 0a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 6.293V.5A.5.5 0 0 1 8 0Z"/>
+                                <path d="M3 7.5a.5.5 0 0 1 .5.5v5.5h9V8a.5.5 0 0 1 1 0v6a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 2 14V8a.5.5 0 0 1 .5-.5Z"/>
+                              </svg>
+                              Video Upload
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0ZM2.04 4.326c.325 1.329 2.532 2.54 3.717 3.19.48.263.793.434.743.484-.08.08-.162.158-.242.234-.416.396-.787.749-.758 1.266.035.634.618.824 1.214 1.017.577.188 1.168.38 1.286.983.082.417-.075.988-.22 1.52-.215.782-.406 1.48.22 1.48 1.5-.5 3.798-3.186 4-5 .138-1.243-2-2-3.5-2.5-.478-.16-.755.081-.99.284-.172.15-.322.279-.51.216-.445-.148-2.5-2-1.5-2.5.78-.39.952-.171 1.227.182.078.099.163.208.273.318.609.304.662-.132.723-.633.039-.322.081-.671.277-.867.434-.434 1.265-.791 2.028-1.12.712-.306 1.365-.587 1.579-.88A7 7 0 1 1 2.04 4.327Z"/>
+                              </svg>
+                              {new Date(timelapse.uploadedAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Video Player */}
+                      <Suspense
+                        fallback={
+                          <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]">
+                            <div className="animate-spin text-4xl">⏳</div>
+                          </div>
+                        }
+                      >
+                        <InlineVideoPlayer
+                          videoKey={timelapse.videoKey}
+                          isPlaying={playingVideo === timelapse._id}
+                          onTogglePlay={() => {
+                            if (playingVideo === timelapse._id) {
+                              setPlayingVideo(null)
+                            } else {
+                              setPlayingVideo(timelapse._id)
+                            }
+                          }}
+                        />
+                      </Suspense>
+
+                      {/* Interaction Footer */}
+                      <div className="p-4">
+                        <div className="flex items-center gap-4 text-sm">
+          <button
+            onClick={() => {
+                              console.log('Like button clicked for:', timelapse._id)
+                              handleLike(timelapse._id, timelapse.likeCount)
+                            }}
+                            disabled={likingInProgress.has(timelapse._id)}
+                            className={`flex items-center gap-1.5 transition group disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isLiked(timelapse._id)
+                                ? 'text-[#f85149]'
+                                : 'text-[#8b949e] hover:text-[#f85149]'
+                            }`}
+                          >
+                            {likingInProgress.has(timelapse._id) ? (
+                              <div className="w-4 h-4 animate-spin">⏳</div>
+                            ) : (
+                              <svg 
+                                className={`w-4 h-4 transition-transform ${
+                                  isLiked(timelapse._id) ? 'scale-110' : 'group-hover:scale-110'
+                                }`}
+                                fill={isLiked(timelapse._id) ? 'currentColor' : 'none'}
+                                stroke="currentColor"
+                                strokeWidth={isLiked(timelapse._id) ? 0 : 2}
+                                viewBox="0 0 16 16"
+                              >
+                                <path d="m8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002ZM4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.58 20.58 0 0 0 8 13.393a20.58 20.58 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z"/>
+                              </svg>
+                            )}
+                            <span className="font-medium">
+                              {getLikeCount(timelapse._id, timelapse.likeCount)}
+                            </span>
+                          </button>
+                          
+                          <button 
+                            onClick={() => setShowComments(showComments === timelapse._id ? null : timelapse._id)}
+                            className="flex items-center gap-1.5 text-[#8b949e] hover:text-[#58a6ff] transition"
+                          >
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                              <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h11A1.5 1.5 0 0 1 15 3.5v8a1.5 1.5 0 0 1-1.5 1.5h-3.25a.75.75 0 0 0-.53.22L8 15.44l-1.72-1.72a.75.75 0 0 0-.53-.22H2.5A1.5 1.5 0 0 1 1 11.5v-8Zm1.5-.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h3.5c.28 0 .549.11.75.31L8 13.56l1.75-1.75c.2-.2.47-.31.75-.31h3.5a.5.5 0 0 0 .5-.5v-8a.5.5 0 0 0-.5-.5h-11Z"/>
+                            </svg>
+                            <span>Comment</span>
+          </button>
+
+          <Link
+                            to="/timelapse/$timelapseId"
+                            params={{ timelapseId: timelapse._id }}
+                            className="flex items-center gap-1.5 text-[#8b949e] hover:text-[#58a6ff] transition"
+                          >
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                              <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>
+                              <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/>
+                            </svg>
+                            <span className="text-xs">View Details</span>
+                          </Link>
+                          
+                          <div className="flex items-center gap-1.5 text-[#8b949e] ml-auto">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                              <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8Z"/>
+                              <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0Z"/>
+                            </svg>
+                            <span>{timelapse.viewCount}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Comments Section */}
+                      {showComments === timelapse._id && (
+                        <Suspense
+                          fallback={
+                            <div className="p-4 border-t border-[#30363d] text-center text-[#8b949e]">
+                              <div className="animate-spin text-2xl inline-block">⏳</div>
+                              <p className="text-xs mt-2">Loading comments...</p>
+                            </div>
+                          }
+                        >
+                          <InlineComments
+                            timelapseId={timelapse._id}
+                            onAddComment={async (content) => {
+                              await addCommentMutation({
+                                timelapseId: timelapse._id,
+                                content,
+                              })
+                            }}
+                          />
+                        </Suspense>
+                      )}
+                    </article>
+                  ))}
+            </div>
+
+                {!feedData.isDone && (
+                  <div className="text-center mt-6">
+                    <button
+                      onClick={() => setCursor(feedData.continueCursor)}
+                      className="bg-[#21262d] border border-[#30363d] text-[#c9d1d9] px-4 py-2 rounded-md hover:bg-[#30363d] transition text-sm font-medium"
+                    >
+                      Show more activities
+                    </button>
+            </div>
+                )}
+              </>
             )}
-          </>
-        )}
           </div>
         </div>
+
+        {/* Create Project Modal */}
+        {showCreateModal && (
+          <CreateProjectModal onClose={() => setShowCreateModal(false)} />
+        )}
+
+        {/* Quick Action Button */}
+        <QuickActionButton onClick={() => setShowCreateModal(true)} />
       </div>
     </main>
   )
