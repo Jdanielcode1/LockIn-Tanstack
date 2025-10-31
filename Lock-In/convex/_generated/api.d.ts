@@ -13,7 +13,7 @@ import type * as r2 from "../r2.js";
 import type * as social from "../social.js";
 import type * as stats from "../stats.js";
 import type * as timelapses from "../timelapses.js";
-import type * as videos from "../videos.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -35,7 +35,7 @@ declare const fullApi: ApiFromModules<{
   social: typeof social;
   stats: typeof stats;
   timelapses: typeof timelapses;
-  videos: typeof videos;
+  users: typeof users;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 

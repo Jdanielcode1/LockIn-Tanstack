@@ -4,6 +4,7 @@ import { paginationOptsValidator } from "convex/server";
 
 export const create = mutation({
   args: {
+    userId: v.id("users"),
     title: v.string(),
     description: v.string(),
     targetHours: v.number(),
@@ -13,6 +14,7 @@ export const create = mutation({
   }),
   handler: async (ctx, args) => {
     const projectId = await ctx.db.insert("projects", {
+      userId: args.userId,
       title: args.title,
       description: args.description,
       targetHours: args.targetHours,
@@ -27,10 +29,20 @@ export const create = mutation({
 
 export const list = query({
   args: {
+    userId: v.optional(v.id("users")),
     paginationOpts: paginationOptsValidator,
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    if (args.userId) {
+      const userId = args.userId; // Extract to const for type narrowing
+      return await ctx.db
+        .query("projects")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .order("desc")
+        .paginate(args.paginationOpts);
+    }
+    
     return await ctx.db
       .query("projects")
       .order("desc")
@@ -46,6 +58,7 @@ export const get = query({
     v.object({
       _id: v.id("projects"),
       _creationTime: v.number(),
+      userId: v.id("users"),
       title: v.string(),
       description: v.string(),
       targetHours: v.number(),
@@ -57,12 +70,20 @@ export const get = query({
       ),
       createdAt: v.number(),
       timelapseCount: v.number(),
+      user: v.object({
+        username: v.string(),
+        displayName: v.string(),
+        avatarKey: v.optional(v.string()),
+      }),
     }),
     v.null()
   ),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
+
+    const user = await ctx.db.get(project.userId);
+    if (!user) return null;
 
     const timelapses = await ctx.db
       .query("timelapses")
@@ -72,6 +93,11 @@ export const get = query({
     return {
       ...project,
       timelapseCount: timelapses.length,
+      user: {
+        username: user.username,
+        displayName: user.displayName,
+        avatarKey: user.avatarKey,
+      },
     };
   },
 });

@@ -5,6 +5,7 @@ import { r2 } from "./r2";
 
 export const create = mutation({
   args: {
+    userId: v.id("users"),
     projectId: v.id("projects"),
     videoKey: v.string(),
     thumbnailKey: v.optional(v.string()),
@@ -15,6 +16,7 @@ export const create = mutation({
   }),
   handler: async (ctx, args) => {
     const timelapseId = await ctx.db.insert("timelapses", {
+      userId: args.userId,
       projectId: args.projectId,
       videoKey: args.videoKey,
       thumbnailKey: args.thumbnailKey,
@@ -81,10 +83,11 @@ export const listFeed = query({
       .order("desc")
       .paginate(args.paginationOpts);
 
-    // Enrich with project titles
+    // Enrich with project titles and user info
     const enrichedPage: Array<{
       _id: any;
       _creationTime: number;
+      userId: any;
       projectId: any;
       projectTitle: string;
       videoKey: string;
@@ -93,14 +96,28 @@ export const listFeed = query({
       uploadedAt: number;
       viewCount: number;
       likeCount: number;
+      user: {
+        username: string;
+        displayName: string;
+        avatarKey?: string;
+      };
     }> = [];
 
     for (const timelapse of result.page) {
       const project = await ctx.db.get(timelapse.projectId);
-      enrichedPage.push({
-        ...timelapse,
-        projectTitle: project?.title || "Unknown Project",
-      });
+      const user = await ctx.db.get(timelapse.userId);
+      
+      if (user) {
+        enrichedPage.push({
+          ...timelapse,
+          projectTitle: project?.title || "Unknown Project",
+          user: {
+            username: user.username,
+            displayName: user.displayName,
+            avatarKey: user.avatarKey,
+          },
+        });
+      }
     }
 
     return {

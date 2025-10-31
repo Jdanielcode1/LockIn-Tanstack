@@ -2,7 +2,9 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 
 export const getOverallStats = query({
-  args: {},
+  args: {
+    userId: v.optional(v.id("users")),
+  },
   returns: v.object({
     totalProjects: v.number(),
     activeProjects: v.number(),
@@ -13,9 +15,26 @@ export const getOverallStats = query({
     totalLikes: v.number(),
     completionRate: v.number(),
   }),
-  handler: async (ctx) => {
-    const projects = await ctx.db.query("projects").collect();
-    const timelapses = await ctx.db.query("timelapses").collect();
+  handler: async (ctx, args) => {
+    let projects;
+    let timelapses;
+
+    if (args.userId) {
+      // Get stats for specific user
+      projects = await ctx.db
+        .query("projects")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .collect();
+      
+      timelapses = await ctx.db
+        .query("timelapses")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .collect();
+    } else {
+      // Get global stats
+      projects = await ctx.db.query("projects").collect();
+      timelapses = await ctx.db.query("timelapses").collect();
+    }
 
     const totalProjects = projects.length;
     const activeProjects = projects.filter((p) => p.status === "active").length;
@@ -125,6 +144,7 @@ export const getActivityFeed = query({
 
 export const getContributionData = query({
   args: {
+    userId: v.optional(v.id("users")),
     year: v.number(),
   },
   returns: v.array(
@@ -137,7 +157,15 @@ export const getContributionData = query({
     const startOfYear = new Date(args.year, 0, 1).getTime();
     const endOfYear = new Date(args.year, 11, 31, 23, 59, 59).getTime();
 
-    const timelapses = await ctx.db.query("timelapses").collect();
+    let timelapses;
+    if (args.userId) {
+      timelapses = await ctx.db
+        .query("timelapses")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .collect();
+    } else {
+      timelapses = await ctx.db.query("timelapses").collect();
+    }
 
     // Filter timelapses for the year
     const yearTimelapses = timelapses.filter(

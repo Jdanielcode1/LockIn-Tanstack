@@ -1,6 +1,7 @@
 import { R2 } from "@convex-dev/r2";
 import { components } from "./_generated/api";
 import { v } from "convex/values";
+import { query } from "./_generated/server";
 
 export const r2 = new R2(components.r2);
 
@@ -16,9 +17,30 @@ export const { generateUploadUrl, syncMetadata } = r2.clientApi({
 });
 
 // Helper function to get video URL from R2
-export const getVideoUrl = async (key: string, expiresIn?: number) => {
-  return await r2.getUrl(key, {
-    expiresIn: expiresIn || 60 * 60 * 24, // 24 hours default
-  });
-};
+// Videos are stored with "videos/" prefix
+export const getVideoUrl = query({
+  args: {
+    videoKey: v.string(),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    return await r2.getUrl(args.videoKey, {
+      expiresIn: 60 * 60 * 24, // 24 hours
+    });
+  },
+});
+
+// Helper function to get avatar URL from R2
+// Avatars are stored with "avatars/" prefix
+export const getAvatarUrl = query({
+  args: {
+    avatarKey: v.string(),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    return await r2.getUrl(args.avatarKey, {
+      expiresIn: 60 * 60 * 24 * 7, // 7 days (avatars change less frequently)
+    });
+  },
+});
 
