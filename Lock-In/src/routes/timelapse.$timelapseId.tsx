@@ -1,17 +1,19 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery, useQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useEffect, useState } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { VideoPlayer } from '../components/VideoPlayer'
+import { useUser } from '../components/UserProvider'
 
 export const Route = createFileRoute('/timelapse/$timelapseId')({
   component: TimelapseDetail,
 })
 
 function TimelapseDetail() {
+  const { user } = useUser()
   const { timelapseId } = Route.useParams()
   const [commentsCursor, setCommentsCursor] = useState<string | null>(null)
   const [newComment, setNewComment] = useState('')
@@ -22,11 +24,13 @@ function TimelapseDetail() {
     })
   )
 
-  const { data: isLiked } = useSuspenseQuery(
-    convexQuery(api.social.isLiked, {
+  const { data: isLiked } = useQuery({
+    ...convexQuery(api.social.isLiked, {
+      userId: user?.userId || ('' as Id<'users'>),
       timelapseId: timelapseId as Id<'timelapses'>,
-    })
-  )
+    }),
+    enabled: !!user,
+  })
 
   const { data: commentsData } = useSuspenseQuery(
     convexQuery(api.social.getComments, {
@@ -62,14 +66,27 @@ function TimelapseDetail() {
   }
 
   const handleLike = async () => {
-    await toggleLike({ timelapseId: timelapseId as Id<'timelapses'> })
+    if (!user) {
+      alert('Please set up your profile first')
+      return
+    }
+    await toggleLike({
+      userId: user.userId,
+      timelapseId: timelapseId as Id<'timelapses'>
+    })
   }
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newComment.trim()) return
 
+    if (!user) {
+      alert('Please set up your profile first')
+      return
+    }
+
     await addComment({
+      userId: user.userId,
       timelapseId: timelapseId as Id<'timelapses'>,
       content: newComment,
     })

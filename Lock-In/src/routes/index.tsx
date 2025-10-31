@@ -1,14 +1,16 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery, useQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { api } from '../../convex/_generated/api'
 import { useState, Suspense } from 'react'
 import { useMutation } from 'convex/react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { CreateProjectModal } from '../components/CreateProjectModal'
+import { AllProjectsModal } from '../components/AllProjectsModal'
 import { InlineVideoPlayer } from '../components/InlineVideoPlayer'
 import { InlineComments } from '../components/InlineComments'
 import { QuickActionButton } from '../components/QuickActionButton'
+import { useUser } from '../components/UserProvider'
 
 export const Route = createFileRoute('/')({
   loader: async (opts) => {
@@ -27,11 +29,13 @@ export const Route = createFileRoute('/')({
 })
 
 function Feed() {
+  const { user } = useUser()
   const [cursor, setCursor] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showAllProjectsModal, setShowAllProjectsModal] = useState(false)
   const [commentingOn, setCommentingOn] = useState<string | null>(null)
   const [commentText, setCommentText] = useState('')
-  
+
   const { data: feedData } = useSuspenseQuery(
     convexQuery(api.timelapses.listFeed, {
       paginationOpts: { numItems: 10, cursor: cursor },
@@ -41,6 +45,15 @@ function Feed() {
   const { data: stats } = useSuspenseQuery(
     convexQuery(api.stats.getOverallStats, {})
   )
+
+  // Use regular useQuery for projects since it's conditional on user existing
+  const { data: myProjectsData } = useQuery({
+    ...convexQuery(api.projects.list, {
+      userId: user?.userId || ('' as any),
+      paginationOpts: { numItems: 4, cursor: null },
+    }),
+    enabled: !!user,
+  })
 
   const [localLikes, setLocalLikes] = useState<Record<string, number>>({})
   const [localLiked, setLocalLiked] = useState<Set<string>>(new Set())
@@ -54,14 +67,19 @@ function Feed() {
   const handleLike = async (timelapseId: Id<'timelapses'>, currentLikes: number) => {
     // Prevent double-clicking
     if (likingInProgress.has(timelapseId)) return
-    
+
+    if (!user) {
+      alert('Please set up your profile first')
+      return
+    }
+
     // Mark as in progress
     setLikingInProgress(prev => new Set(prev).add(timelapseId))
-    
+
     // Optimistic update
     const wasLiked = localLiked.has(timelapseId)
     const newLikes = wasLiked ? currentLikes - 1 : currentLikes + 1
-    
+
     setLocalLikes(prev => ({ ...prev, [timelapseId]: newLikes }))
     setLocalLiked(prev => {
       const newSet = new Set(prev)
@@ -72,10 +90,13 @@ function Feed() {
       }
       return newSet
     })
-    
+
     try {
       console.log('Calling toggleLike mutation...')
-      const result = await toggleLikeMutation({ timelapseId })
+      const result = await toggleLikeMutation({
+        userId: user.userId,
+        timelapseId
+      })
       console.log('Mutation result:', result)
       
       // Update local state based on server response
@@ -116,11 +137,17 @@ function Feed() {
 
   const handleComment = async (timelapseId: Id<'timelapses'>) => {
     if (!commentText.trim()) return
-    
+
+    if (!user) {
+      alert('Please set up your profile first')
+      return
+    }
+
     try {
-      await addCommentMutation({ 
-        timelapseId, 
-        content: commentText 
+      await addCommentMutation({
+        userId: user.userId,
+        timelapseId,
+        content: commentText
       })
       setCommentText('')
       setCommentingOn(null)
@@ -191,6 +218,58 @@ function Feed() {
                   </div>
                 </div>
               </div>
+
+              {/* New Project Button */}
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="w-full bg-[#238636] hover:bg-[#2ea043] text-white text-center py-2.5 rounded-md transition text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/>
+                </svg>
+                New Project
+              </button>
+
+              {/* Latest My Projects */}
+              {user && myProjectsData && myProjectsData.page.length > 0 && (
+                <div className="bg-[#161b22] border border-[#30363d] rounded-md p-4">
+                  <h3 className="text-sm font-semibold text-[#c9d1d9] mb-3">Latest My Projects</h3>
+                  <div className="space-y-2">
+                    {myProjectsData.page.map((project) => {
+                      const progress = Math.min((project.completedHours / project.targetHours) * 100, 100)
+                      return (
+                        <Link
+                          key={project._id}
+                          to="/projects/$projectId"
+                          params={{ projectId: project._id }}
+                          className="block p-2 rounded hover:bg-[#0d1117] transition group"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm text-[#c9d1d9] font-medium group-hover:text-[#58a6ff] transition line-clamp-1">
+                              {project.title}
+                            </p>
+                            <span className="text-xs text-[#8b949e] ml-2 flex-shrink-0">
+                              {progress.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-[#21262d] rounded-full h-1">
+                            <div
+                              className="bg-[#238636] h-1 rounded-full transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setShowAllProjectsModal(true)}
+                    className="w-full mt-3 text-sm text-[#58a6ff] hover:text-[#79c0ff] transition text-center"
+                  >
+                    Show more →
+                  </button>
+                </div>
+              )}
 
               {/* Latest Activity */}
               <div className="bg-[#161b22] border border-[#30363d] rounded-md p-4">
@@ -288,14 +367,6 @@ function Feed() {
                   <div className="text-xs text-[#8b949e]">total this week</div>
                 </div>
               </div>
-
-              {/* Quick Actions */}
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="block w-full bg-[#238636] hover:bg-[#2ea043] text-white text-center py-2 rounded-md transition text-sm font-medium"
-              >
-                + New Project
-              </button>
             </div>
           </aside>
 
@@ -475,7 +546,12 @@ function Feed() {
                           <InlineComments
                             timelapseId={timelapse._id}
                             onAddComment={async (content) => {
+                              if (!user) {
+                                alert('Please set up your profile first')
+                                return
+                              }
                               await addCommentMutation({
+                                userId: user.userId,
                                 timelapseId: timelapse._id,
                                 content,
                               })
@@ -505,6 +581,17 @@ function Feed() {
         {/* Create Project Modal */}
         {showCreateModal && (
           <CreateProjectModal onClose={() => setShowCreateModal(false)} />
+        )}
+
+        {/* All Projects Modal */}
+        {showAllProjectsModal && (
+          <Suspense fallback={
+            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+              <div className="animate-spin text-6xl">⏳</div>
+            </div>
+          }>
+            <AllProjectsModal onClose={() => setShowAllProjectsModal(false)} />
+          </Suspense>
         )}
 
         {/* Quick Action Button */}

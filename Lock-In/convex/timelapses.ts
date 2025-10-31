@@ -53,6 +53,7 @@ export const listByProject = query({
     v.object({
       _id: v.id("timelapses"),
       _creationTime: v.number(),
+      userId: v.id("users"),
       projectId: v.id("projects"),
       videoKey: v.string(),
       thumbnailKey: v.optional(v.string()),
@@ -135,6 +136,7 @@ export const get = query({
     v.object({
       _id: v.id("timelapses"),
       _creationTime: v.number(),
+      userId: v.id("users"),
       projectId: v.id("projects"),
       projectTitle: v.string(),
       videoKey: v.string(),
