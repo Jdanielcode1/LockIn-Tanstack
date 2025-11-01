@@ -101,6 +101,33 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
             .catch(err => {
               console.error('Failed to trigger processing:', err)
             })
+
+          // Also trigger AI thumbnail generation
+          const thumbnailUrl = `${workerUrl}/generate-thumbnail`
+          const thumbnailPayload = {
+            videoKey,
+            timelapseId,
+          }
+
+          console.log('Triggering AI thumbnail generation:', thumbnailUrl, thumbnailPayload)
+
+          fetch(thumbnailUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(thumbnailPayload),
+          })
+            .then(response => {
+              console.log('Thumbnail generation response status:', response.status)
+              return response.json()
+            })
+            .then(data => {
+              console.log('Thumbnail generation response:', data)
+            })
+            .catch(err => {
+              console.error('Failed to trigger thumbnail generation:', err)
+            })
         } else {
           console.warn('VITE_WORKER_URL not configured - skipping server-side processing')
         }

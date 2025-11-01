@@ -33,26 +33,24 @@ const s3Client = new S3Client({
   },
 });
 
-const BUCKET_NAME = process.env.R2_BUCKET;
+const BUCKET_NAME = process.env.R2_BUCKET_NAME;
 const TMP_DIR = '/tmp';
 
-// Download file from R2
-async function downloadFromR2(key) {
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
+// Download file from URL
+async function downloadFromUrl(url) {
+  console.log('Downloading video from URL:', url.substring(0, 100) + '...');
 
-  const response = await s3Client.send(command);
   const tmpPath = path.join(TMP_DIR, `input-${Date.now()}.mp4`);
 
-  const stream = fs.createWriteStream(tmpPath);
-  await new Promise((resolve, reject) => {
-    response.Body.pipe(stream);
-    stream.on('finish', resolve);
-    stream.on('error', reject);
-  });
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download video: ${response.statusText}`);
+  }
 
+  const buffer = await response.arrayBuffer();
+  fs.writeFileSync(tmpPath, Buffer.from(buffer));
+
+  console.log('Video downloaded successfully to:', tmpPath);
   return tmpPath;
 }
 
@@ -108,6 +106,85 @@ async function processVideo(inputPath, outputPath, speedMultiplier) {
   });
 }
 
+// Extract frames from video at different timestamps
+async function extractFrames(inputPath, timestamps = [0.25, 0.5, 0.75]) {
+  console.log('Extracting frames at timestamps:', timestamps);
+
+  // First, get video duration
+  const duration = await new Promise((resolve, reject) => {
+    const ffprobe = spawn('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      inputPath
+    ]);
+
+    let output = '';
+    ffprobe.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    ffprobe.on('close', (code) => {
+      if (code === 0) {
+        resolve(parseFloat(output.trim()));
+      } else {
+        reject(new Error(`ffprobe exited with code ${code}`));
+      }
+    });
+
+    ffprobe.on('error', reject);
+  });
+
+  console.log('Video duration:', duration, 'seconds');
+
+  // Extract frames at specified timestamps
+  const frames = [];
+
+  for (const timestamp of timestamps) {
+    const timeInSeconds = duration * timestamp;
+    const outputPath = path.join(TMP_DIR, `frame-${Date.now()}-${timestamp}.jpg`);
+
+    await new Promise((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', [
+        '-ss', timeInSeconds.toString(),
+        '-i', inputPath,
+        '-vframes', '1',
+        '-q:v', '2', // High quality JPEG
+        '-y',
+        outputPath
+      ]);
+
+      let stderr = '';
+      ffmpeg.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          console.log(`Extracted frame at ${timestamp * 100}%`);
+          resolve();
+        } else {
+          reject(new Error(`FFmpeg frame extraction failed: ${stderr}`));
+        }
+      });
+
+      ffmpeg.on('error', reject);
+    });
+
+    // Read frame as base64
+    const frameBuffer = fs.readFileSync(outputPath);
+    const base64 = frameBuffer.toString('base64');
+
+    frames.push({
+      timestamp,
+      base64,
+      path: outputPath
+    });
+  }
+
+  return frames;
+}
+
 // Call Convex HTTP action to update processing status
 async function updateConvexStatus(timelapseId, status, processedVideoKey = null, error = null) {
   const convexUrl = process.env.CONVEX_URL;
@@ -148,48 +225,44 @@ async function updateConvexStatus(timelapseId, status, processedVideoKey = null,
 
 // Main processing endpoint
 app.post('/process', async (req, res) => {
-  const { videoKey, speedMultiplier = 8, timelapseId } = req.body;
+  const { videoUrl, speedMultiplier = 8, timelapseId } = req.body;
 
-  if (!videoKey) {
-    return res.status(400).json({ error: 'videoKey is required' });
+  if (!videoUrl) {
+    return res.status(400).json({ error: 'videoUrl is required' });
   }
 
   if (!timelapseId) {
     return res.status(400).json({ error: 'timelapseId is required' });
   }
 
-  console.log(`Processing video: ${videoKey} with speed: ${speedMultiplier}x for timelapse: ${timelapseId}`);
-
-  // Update status to "processing"
-  await updateConvexStatus(timelapseId, 'processing');
+  console.log(`Processing video from URL with speed: ${speedMultiplier}x for timelapse: ${timelapseId}`);
 
   let inputPath, outputPath;
 
   try {
-    // Download video from R2
-    console.log('Downloading video from R2...');
-    inputPath = await downloadFromR2(videoKey);
+    // Download video from URL
+    console.log('Downloading video from URL...');
+    inputPath = await downloadFromUrl(videoUrl);
 
     // Process video
     outputPath = path.join(TMP_DIR, `output-${Date.now()}.mp4`);
     console.log('Processing video with FFmpeg...');
     await processVideo(inputPath, outputPath, speedMultiplier);
 
-    // Upload processed video back to R2
-    console.log('Uploading processed video to R2...');
-    const processedKey = await uploadToR2(outputPath, 'timelapses');
+    // Read processed video and return as base64
+    console.log('Reading processed video...');
+    const processedVideoBuffer = fs.readFileSync(outputPath);
+    const processedVideoBase64 = processedVideoBuffer.toString('base64');
 
     // Cleanup temp files
     fs.unlinkSync(inputPath);
     fs.unlinkSync(outputPath);
 
-    // Update Convex with success
-    await updateConvexStatus(timelapseId, 'complete', processedKey);
+    console.log('Sending processed video back to worker');
 
     res.json({
       success: true,
-      processedVideoKey: processedKey,
-      originalVideoKey: videoKey,
+      videoBase64: processedVideoBase64,
       speedMultiplier,
     });
   } catch (error) {
@@ -199,8 +272,60 @@ app.post('/process', async (req, res) => {
     if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
     if (outputPath && fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
 
-    // Update Convex with failure
-    await updateConvexStatus(timelapseId, 'failed', null, error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Extract frames endpoint for AI thumbnail generation
+app.post('/extract-frames', async (req, res) => {
+  const { videoUrl } = req.body;
+
+  if (!videoUrl) {
+    return res.status(400).json({ error: 'videoUrl is required' });
+  }
+
+  console.log(`Extracting frames from video URL`);
+
+  let inputPath;
+  const framePaths = [];
+
+  try {
+    // Download video from URL
+    console.log('Downloading video from URL...');
+    inputPath = await downloadFromUrl(videoUrl);
+
+    // Extract frames at 25%, 50%, 75%
+    const frames = await extractFrames(inputPath, [0.25, 0.5, 0.75]);
+
+    // Keep track of paths for cleanup
+    frames.forEach(f => framePaths.push(f.path));
+
+    // Cleanup input video
+    fs.unlinkSync(inputPath);
+
+    res.json({
+      success: true,
+      frames: frames.map(f => ({
+        timestamp: f.timestamp,
+        base64: f.base64
+      }))
+    });
+
+    // Cleanup frame files after response is sent
+    framePaths.forEach(p => {
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    });
+  } catch (error) {
+    console.error('Frame extraction error:', error);
+
+    // Cleanup on error
+    if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+    framePaths.forEach(p => {
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    });
 
     res.status(500).json({
       success: false,

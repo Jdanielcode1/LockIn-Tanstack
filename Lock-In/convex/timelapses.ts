@@ -125,6 +125,24 @@ export const updateProcessingStatusInternal = internalMutation({
   },
 });
 
+// Internal mutation for updating thumbnail
+export const updateThumbnailInternal = internalMutation({
+  args: {
+    timelapseId: v.id("timelapses"),
+    thumbnailKey: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const timelapse = await ctx.db.get(args.timelapseId);
+    if (!timelapse) return null;
+
+    await ctx.db.patch(args.timelapseId, {
+      thumbnailKey: args.thumbnailKey,
+    });
+    return null;
+  },
+});
+
 export const listByProject = query({
   args: {
     projectId: v.id("projects"),

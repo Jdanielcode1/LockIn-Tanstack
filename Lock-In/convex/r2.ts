@@ -1,7 +1,7 @@
 import { R2 } from "@convex-dev/r2";
 import { components } from "./_generated/api";
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, internalQuery } from "./_generated/server";
 
 export const r2 = new R2(components.r2);
 
@@ -43,6 +43,36 @@ export const getAvatarUrl = query({
     }
     return await r2.getUrl(args.avatarKey, {
       expiresIn: 60 * 60 * 24 * 7, // 7 days (avatars change less frequently)
+    });
+  },
+});
+
+// Helper function to get thumbnail URL from R2
+// Thumbnails are stored with "thumbnails/" prefix
+export const getThumbnailUrl = query({
+  args: {
+    thumbnailKey: v.string(),
+  },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    if (!args.thumbnailKey || args.thumbnailKey.trim() === '') {
+      return null;
+    }
+    return await r2.getUrl(args.thumbnailKey, {
+      expiresIn: 60 * 60 * 24, // 24 hours
+    });
+  },
+});
+
+// Internal query for getting video URL (callable from HTTP actions)
+export const getVideoUrlInternal = internalQuery({
+  args: {
+    videoKey: v.string(),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    return await r2.getUrl(args.videoKey, {
+      expiresIn: 60 * 60 * 24, // 24 hours
     });
   },
 });
