@@ -43,6 +43,8 @@ export default defineSchema({
     isTimelapse: v.optional(v.boolean()),
     speedMultiplier: v.optional(v.number()),
     originalDuration: v.optional(v.number()),
+    videoWidth: v.optional(v.number()), // Video width for aspect ratio
+    videoHeight: v.optional(v.number()), // Video height for aspect ratio
     processingStatus: v.optional(
       v.union(
         v.literal("pending"),

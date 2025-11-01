@@ -75,6 +75,35 @@ function ProjectDetail() {
     }
   }
 
+  const handleCancelProcessing = async (timelapseId: string) => {
+    const workerUrl = import.meta.env.VITE_WORKER_URL
+    if (!workerUrl) {
+      alert('Worker URL not configured')
+      return
+    }
+
+    if (!confirm('Are you sure you want to cancel this processing job?')) {
+      return
+    }
+
+    try {
+      console.log(`Cancelling processing for timelapse: ${timelapseId}`)
+      const response = await fetch(`${workerUrl}/cancel/${timelapseId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to cancel processing')
+      }
+
+      alert('Processing cancelled successfully')
+      // The page will automatically update via Convex reactivity
+    } catch (error) {
+      console.error('Error cancelling processing:', error)
+      alert('Failed to cancel processing. Please try again.')
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#0d1117]">
       <div className="container mx-auto px-4 py-8 max-w-[1280px]">
@@ -203,7 +232,7 @@ function ProjectDetail() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {timelapses.map((timelapse) => (
-              <TimelapseCard key={timelapse._id} timelapse={timelapse} />
+              <TimelapseCard key={timelapse._id} timelapse={timelapse} onCancelProcessing={handleCancelProcessing} />
             ))}
           </div>
         )}
@@ -221,13 +250,35 @@ function ProjectDetail() {
 }
 
 // Thumbnail display component for timelapse cards
-function TimelapseCard({ timelapse }: { timelapse: any }) {
+function TimelapseCard({ timelapse, onCancelProcessing }: { timelapse: any; onCancelProcessing: (timelapseId: string) => void }) {
   const { data: thumbnailUrl } = useQuery({
     ...convexQuery(api.r2.getThumbnailUrl, {
       thumbnailKey: timelapse.thumbnailKey || '',
     }),
     enabled: !!timelapse.thumbnailKey,
   })
+
+  // Calculate aspect ratio from video dimensions
+  const getAspectRatioClass = () => {
+    if (!timelapse.videoWidth || !timelapse.videoHeight) {
+      return 'aspect-video' // Default to 16:9 if dimensions not available
+    }
+
+    const aspectRatio = timelapse.videoWidth / timelapse.videoHeight
+
+    // Vertical video (TikTok style: 9:16 or portrait)
+    if (aspectRatio < 0.8) {
+      return 'aspect-[9/16]'
+    }
+    // Horizontal video (YouTube style: 16:9 or landscape)
+    else if (aspectRatio > 1.2) {
+      return 'aspect-video'
+    }
+    // Square-ish video
+    else {
+      return 'aspect-square'
+    }
+  }
 
   return (
     <Link
@@ -236,7 +287,7 @@ function TimelapseCard({ timelapse }: { timelapse: any }) {
       className="group"
     >
       <div className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden hover:border-[#8b949e] transition">
-        <div className="aspect-video bg-[#0d1117] flex items-center justify-center relative overflow-hidden">
+        <div className={`${getAspectRatioClass()} bg-[#0d1117] flex items-center justify-center relative overflow-hidden`}>
           {thumbnailUrl ? (
             <img
               src={thumbnailUrl}
@@ -249,7 +300,7 @@ function TimelapseCard({ timelapse }: { timelapse: any }) {
 
           {/* Processing Status Badge */}
           {timelapse.processingStatus && timelapse.processingStatus !== 'complete' && (
-            <div className="absolute top-3 right-3 z-20">
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
               {timelapse.processingStatus === 'failed' ? (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
@@ -258,13 +309,28 @@ function TimelapseCard({ timelapse }: { timelapse: any }) {
                   Failed
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
-                  <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                  </svg>
-                  {timelapse.processingStatus === 'pending' ? 'Queued' : 'Processing'}
-                </span>
+                <>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                    <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                    {timelapse.processingStatus === 'pending' ? 'Queued' : 'Processing'}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onCancelProcessing(timelapse._id)
+                    }}
+                    className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
+                    title="Cancel processing"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
+                      <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                    </svg>
+                  </button>
+                </>
               )}
             </div>
           )}

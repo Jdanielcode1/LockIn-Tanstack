@@ -42,6 +42,25 @@ export class VideoProcessor extends Container {
   }
 }
 
+// Helper: Fetch with timeout
+async function fetchWithTimeout(promise, timeoutMs, timeoutErrorMsg = 'Request timed out') {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(timeoutErrorMsg));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
+
 // Helper: Upload base64 image to R2
 async function uploadThumbnailToR2(env, base64Data, prefix = 'thumbnails') {
   const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
@@ -167,13 +186,17 @@ export default {
         const id = env.VIDEO_PROCESSOR.idFromName("video-processor-ai-thumbnails");
         const stub = env.VIDEO_PROCESSOR.get(id);
 
-        // Extract frames from container
-        const extractResponse = await stub.fetch(
-          new Request('http://container/extract-frames', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ videoUrl }),
-          })
+        // Extract frames from container with 2 minute timeout
+        const extractResponse = await fetchWithTimeout(
+          stub.fetch(
+            new Request('http://container/extract-frames', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ videoUrl }),
+            })
+          ),
+          2 * 60 * 1000, // 2 minutes
+          'Frame extraction timed out after 2 minutes'
         );
 
         if (!extractResponse.ok) {
@@ -253,8 +276,11 @@ export default {
 
     // Video processing endpoint
     if (url.pathname === '/process' && request.method === 'POST') {
+      let timelapseId; // Declare in outer scope for catch block
       try {
-        const { videoKey, speedMultiplier, timelapseId } = await request.json();
+        const body = await request.json();
+        const { videoKey, speedMultiplier } = body;
+        timelapseId = body.timelapseId;
 
         if (!videoKey || !timelapseId) {
           return new Response(
@@ -276,13 +302,17 @@ export default {
         const id = env.VIDEO_PROCESSOR.idFromName("video-processor-ai-thumbnails");
         const stub = env.VIDEO_PROCESSOR.get(id);
 
-        // Forward to container with videoUrl
-        const containerResponse = await stub.fetch(
-          new Request('http://container/process', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ videoUrl, speedMultiplier, timelapseId }),
-          })
+        // Forward to container with videoUrl, with 5 minute timeout
+        const containerResponse = await fetchWithTimeout(
+          stub.fetch(
+            new Request('http://container/process', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ videoUrl, speedMultiplier, timelapseId }),
+            })
+          ),
+          5 * 60 * 1000, // 5 minutes
+          'Video processing timed out after 5 minutes'
         );
 
         if (!containerResponse.ok) {
@@ -318,11 +348,63 @@ export default {
       } catch (error) {
         console.error('Processing error:', error);
 
-        // Update Convex with failure
-        if (request.json && request.json.timelapseId) {
-          await updateConvexStatus(env, request.json.timelapseId, 'failed', null, error.message);
+        // Update Convex with failure if we have timelapseId
+        if (timelapseId) {
+          await updateConvexStatus(env, timelapseId, 'failed', null, error.message);
         }
 
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+    }
+
+    // Cancel processing endpoint
+    if (url.pathname.startsWith('/cancel/') && request.method === 'DELETE') {
+      try {
+        const timelapseId = url.pathname.split('/cancel/')[1];
+
+        if (!timelapseId) {
+          return new Response(
+            JSON.stringify({ error: 'timelapseId is required' }),
+            { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+
+        console.log(`Cancelling processing for timelapse: ${timelapseId}`);
+
+        // Get Durable Object
+        const id = env.VIDEO_PROCESSOR.idFromName("video-processor-ai-thumbnails");
+        const stub = env.VIDEO_PROCESSOR.get(id);
+
+        // Forward cancellation request to container
+        const cancelResponse = await stub.fetch(
+          new Request(`http://container/process/${timelapseId}`, {
+            method: 'DELETE',
+          })
+        );
+
+        if (!cancelResponse.ok) {
+          const errorText = await cancelResponse.text();
+          console.error(`Cancellation failed: ${errorText}`);
+          return new Response(
+            JSON.stringify({ error: `Cancellation failed: ${errorText}` }),
+            { status: cancelResponse.status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+
+        // Update Convex status to cancelled
+        await updateConvexStatus(env, timelapseId, 'failed', null, 'Processing cancelled by user');
+
+        console.log(`Successfully cancelled processing for timelapse: ${timelapseId}`);
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Processing cancelled successfully' }),
+          { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      } catch (error) {
+        console.error('Cancellation error:', error);
         return new Response(
           JSON.stringify({ error: error.message }),
           { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }

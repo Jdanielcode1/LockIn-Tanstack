@@ -13,6 +13,8 @@ export const create = mutation({
     isTimelapse: v.optional(v.boolean()),
     speedMultiplier: v.optional(v.number()),
     originalDuration: v.optional(v.number()),
+    videoWidth: v.optional(v.number()),
+    videoHeight: v.optional(v.number()),
     requestProcessing: v.optional(v.boolean()), // True if user wants server-side processing
   },
   returns: v.object({
@@ -32,6 +34,8 @@ export const create = mutation({
       isTimelapse: args.isTimelapse ?? false,
       speedMultiplier: args.speedMultiplier,
       originalDuration: args.originalDuration,
+      videoWidth: args.videoWidth,
+      videoHeight: args.videoHeight,
       processingStatus: args.requestProcessing ? "pending" : undefined,
     });
 
@@ -164,6 +168,8 @@ export const listByProject = query({
       isTimelapse: v.optional(v.boolean()),
       speedMultiplier: v.optional(v.number()),
       originalDuration: v.optional(v.number()),
+      videoWidth: v.optional(v.number()),
+      videoHeight: v.optional(v.number()),
       processingStatus: v.optional(
         v.union(
           v.literal("pending"),
@@ -245,6 +251,8 @@ export const get = query({
       isTimelapse: v.optional(v.boolean()),
       speedMultiplier: v.optional(v.number()),
       originalDuration: v.optional(v.number()),
+      videoWidth: v.optional(v.number()),
+      videoHeight: v.optional(v.number()),
       processingStatus: v.optional(
         v.union(
           v.literal("pending"),

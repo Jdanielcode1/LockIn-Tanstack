@@ -7,10 +7,13 @@ const crypto = require('crypto');
 
 const app = express();
 
+// Track active FFmpeg processes by timelapseId for cancellation
+const activeProcesses = new Map(); // Map<timelapseId, { ffmpegProcess, inputPath, outputPath }>
+
 // CORS middleware
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
 
   // Handle preflight
@@ -71,7 +74,7 @@ async function uploadToR2(filePath, prefix = 'videos') {
 }
 
 // Process video with FFmpeg
-async function processVideo(inputPath, outputPath, speedMultiplier) {
+async function processVideo(inputPath, outputPath, speedMultiplier, timelapseId = null) {
   return new Promise((resolve, reject) => {
     // Use setpts to change timestamps and fps filter to output at proper frame rate
     const ffmpeg = spawn('ffmpeg', [
@@ -84,7 +87,14 @@ async function processVideo(inputPath, outputPath, speedMultiplier) {
       outputPath
     ]);
 
+    // Track this process if timelapseId provided
+    if (timelapseId) {
+      activeProcesses.set(timelapseId, { ffmpegProcess: ffmpeg, inputPath, outputPath });
+      console.log(`Tracking FFmpeg process for timelapse: ${timelapseId}`);
+    }
+
     let stderr = '';
+    let wasKilled = false;
 
     ffmpeg.stderr.on('data', (data) => {
       stderr += data.toString();
@@ -92,7 +102,14 @@ async function processVideo(inputPath, outputPath, speedMultiplier) {
     });
 
     ffmpeg.on('close', (code) => {
-      if (code === 0) {
+      // Remove from tracking
+      if (timelapseId) {
+        activeProcesses.delete(timelapseId);
+      }
+
+      if (wasKilled) {
+        reject(new Error('FFmpeg process was cancelled'));
+      } else if (code === 0) {
         console.log('FFmpeg processing completed successfully');
         resolve();
       } else {
@@ -101,8 +118,17 @@ async function processVideo(inputPath, outputPath, speedMultiplier) {
     });
 
     ffmpeg.on('error', (err) => {
+      // Remove from tracking
+      if (timelapseId) {
+        activeProcesses.delete(timelapseId);
+      }
       reject(err);
     });
+
+    // Store a flag to mark if killed
+    ffmpeg.wasKilled = false;
+    ffmpeg.on('SIGTERM', () => { wasKilled = true; });
+    ffmpeg.on('SIGKILL', () => { wasKilled = true; });
   });
 }
 
@@ -247,7 +273,7 @@ app.post('/process', async (req, res) => {
     // Process video
     outputPath = path.join(TMP_DIR, `output-${Date.now()}.mp4`);
     console.log('Processing video with FFmpeg...');
-    await processVideo(inputPath, outputPath, speedMultiplier);
+    await processVideo(inputPath, outputPath, speedMultiplier, timelapseId);
 
     // Read processed video and return as base64
     console.log('Reading processed video...');
@@ -330,6 +356,69 @@ app.post('/extract-frames', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
+    });
+  }
+});
+
+// Cancel processing endpoint
+app.delete('/process/:timelapseId', (req, res) => {
+  const { timelapseId } = req.params;
+
+  console.log(`Received cancellation request for timelapse: ${timelapseId}`);
+
+  const processInfo = activeProcesses.get(timelapseId);
+
+  if (!processInfo) {
+    console.log(`No active process found for timelapse: ${timelapseId}`);
+    return res.status(404).json({
+      success: false,
+      error: 'No active process found for this timelapse'
+    });
+  }
+
+  const { ffmpegProcess, inputPath, outputPath } = processInfo;
+
+  try {
+    // Kill the FFmpeg process
+    console.log(`Killing FFmpeg process (PID: ${ffmpegProcess.pid})...`);
+    ffmpegProcess.kill('SIGTERM');
+
+    // Give it a moment, then force kill if needed
+    setTimeout(() => {
+      if (!ffmpegProcess.killed) {
+        console.log('Process did not terminate, force killing...');
+        ffmpegProcess.kill('SIGKILL');
+      }
+    }, 2000);
+
+    // Cleanup temp files
+    try {
+      if (inputPath && fs.existsSync(inputPath)) {
+        fs.unlinkSync(inputPath);
+        console.log(`Cleaned up input file: ${inputPath}`);
+      }
+      if (outputPath && fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+        console.log(`Cleaned up output file: ${outputPath}`);
+      }
+    } catch (cleanupError) {
+      console.error('Error cleaning up files:', cleanupError);
+    }
+
+    // Remove from active processes
+    activeProcesses.delete(timelapseId);
+
+    console.log(`Successfully cancelled processing for timelapse: ${timelapseId}`);
+
+    res.json({
+      success: true,
+      message: 'Processing cancelled successfully'
+    });
+  } catch (error) {
+    console.error('Error cancelling process:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

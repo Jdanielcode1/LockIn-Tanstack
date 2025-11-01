@@ -19,6 +19,8 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
   const [progress, setProgress] = useState(0)
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const currentTimelapseIdRef = useRef<string | null>(null)
 
   // Timelapse processing state
   const [makeTimelapse, setMakeTimelapse] = useState(false)
@@ -27,10 +29,40 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
   const uploadFile = useUploadFile(api.r2)
   const createTimelapse = useMutation(api.timelapses.create)
 
+  const handleCancel = async () => {
+    // Abort ongoing HTTP requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+
+    // Cancel server-side processing if a timelapse is being processed
+    if (currentTimelapseIdRef.current && makeTimelapse) {
+      const workerUrl = import.meta.env.VITE_WORKER_URL
+      if (workerUrl) {
+        try {
+          console.log(`Cancelling server-side processing for timelapse: ${currentTimelapseIdRef.current}`)
+          await fetch(`${workerUrl}/cancel/${currentTimelapseIdRef.current}`, {
+            method: 'DELETE',
+          })
+          console.log('Successfully cancelled server-side processing')
+        } catch (error) {
+          console.error('Failed to cancel server-side processing:', error)
+        }
+      }
+      currentTimelapseIdRef.current = null
+    }
+
+    setUploading(false)
+    setProgress(0)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!videoFile || !user) return
 
+    // Create new AbortController for this upload
+    abortControllerRef.current = new AbortController()
     setUploading(true)
     setProgress(10)
 
@@ -40,21 +72,24 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
       const videoKey = await uploadFile(videoFile)
       setProgress(70)
 
-      // Get original duration if making timelapse
+      // Get video metadata (duration and dimensions)
       let originalDuration: number | undefined
-      if (makeTimelapse) {
-        try {
-          const video = document.createElement('video')
-          video.preload = 'metadata'
-          video.src = URL.createObjectURL(videoFile)
-          await new Promise((resolve) => {
-            video.onloadedmetadata = resolve
-          })
-          originalDuration = video.duration
-          URL.revokeObjectURL(video.src)
-        } catch (error) {
-          console.error('Error getting video duration:', error)
-        }
+      let videoWidth: number | undefined
+      let videoHeight: number | undefined
+
+      try {
+        const video = document.createElement('video')
+        video.preload = 'metadata'
+        video.src = URL.createObjectURL(videoFile)
+        await new Promise((resolve) => {
+          video.onloadedmetadata = resolve
+        })
+        originalDuration = video.duration
+        videoWidth = video.videoWidth
+        videoHeight = video.videoHeight
+        URL.revokeObjectURL(video.src)
+      } catch (error) {
+        console.error('Error getting video metadata:', error)
       }
 
       // Create timelapse record in database
@@ -66,8 +101,13 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
         isTimelapse: makeTimelapse,
         speedMultiplier: makeTimelapse ? speedMultiplier : undefined,
         originalDuration: makeTimelapse ? originalDuration : undefined,
+        videoWidth,
+        videoHeight,
         requestProcessing: makeTimelapse, // Request server-side processing
       })
+
+      // Store timelapseId for cancellation
+      currentTimelapseIdRef.current = timelapseId
 
       // If processing requested, trigger Cloudflare Worker
       if (makeTimelapse) {
@@ -90,6 +130,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(payload),
+            signal: abortControllerRef.current?.signal,
           })
             .then(response => {
               console.log('Worker response status:', response.status)
@@ -99,7 +140,11 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
               console.log('Worker response:', data)
             })
             .catch(err => {
-              console.error('Failed to trigger processing:', err)
+              if (err.name === 'AbortError') {
+                console.log('Processing request was cancelled')
+              } else {
+                console.error('Failed to trigger processing:', err)
+              }
             })
 
           // Also trigger AI thumbnail generation
@@ -117,6 +162,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(thumbnailPayload),
+            signal: abortControllerRef.current?.signal,
           })
             .then(response => {
               console.log('Thumbnail generation response status:', response.status)
@@ -126,7 +172,11 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
               console.log('Thumbnail generation response:', data)
             })
             .catch(err => {
-              console.error('Failed to trigger thumbnail generation:', err)
+              if (err.name === 'AbortError') {
+                console.log('Thumbnail generation request was cancelled')
+              } else {
+                console.error('Failed to trigger thumbnail generation:', err)
+              }
             })
         } else {
           console.warn('VITE_WORKER_URL not configured - skipping server-side processing')
@@ -134,13 +184,20 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
       }
 
       setProgress(100)
+      currentTimelapseIdRef.current = null // Clear on success
       onComplete()
-    } catch (error) {
-      console.error('Upload error:', error)
-      alert('Upload failed. Please try again.')
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Upload was cancelled by user')
+        alert('Upload cancelled')
+      } else {
+        console.error('Upload error:', error)
+        alert('Upload failed. Please try again.')
+      }
     } finally {
       setUploading(false)
       setProgress(0)
+      abortControllerRef.current = null
     }
   }
 
@@ -413,11 +470,23 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
             </button>
             <button
               type="button"
-              onClick={onCancel}
-              disabled={uploading}
-              className="flex-1 bg-[#21262d] border border-[#30363d] text-[#c9d1d9] py-2.5 px-4 rounded-md hover:bg-[#30363d] transition font-medium disabled:opacity-50"
+              onClick={uploading ? handleCancel : onCancel}
+              className={`flex-1 py-2.5 px-4 rounded-md transition font-medium flex items-center justify-center gap-2 ${
+                uploading
+                  ? 'bg-red-600/10 border border-red-600/20 text-red-400 hover:bg-red-600/20'
+                  : 'bg-[#21262d] border border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d]'
+              }`}
             >
-              Cancel
+              {uploading ? (
+                <>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                  </svg>
+                  Cancel Upload
+                </>
+              ) : (
+                'Cancel'
+              )}
             </button>
           </div>
         </form>
