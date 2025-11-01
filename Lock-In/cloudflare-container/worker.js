@@ -58,7 +58,8 @@ export default {
     }
 
     // Get Durable Object ID (use a consistent ID for the processor)
-    const id = env.VIDEO_PROCESSOR.idFromName("video-processor-singleton");
+    // Changed to force fresh instance with updated CONVEX_URL (.convex.site)
+    const id = env.VIDEO_PROCESSOR.idFromName("video-processor-with-http-action");
     const stub = env.VIDEO_PROCESSOR.get(id);
 
     // Forward request to Container - it will automatically start and wait for ports
