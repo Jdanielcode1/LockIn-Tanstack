@@ -330,6 +330,40 @@ export default {
       }
     }
 
+    // License acceptance endpoint
+    if (url.pathname === '/accept-ai-license' && request.method === 'POST') {
+      try {
+        console.log('Accepting Llama 3.2 Vision AI license...');
+
+        // Submit 'agree' to accept the license using the correct API format
+        const response = await env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+          prompt: 'agree'
+        });
+
+        console.log('License acceptance response:', response);
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'AI license accepted', response }),
+          { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      } catch (error) {
+        // Check if this is the "success" error message
+        if (error.message && error.message.includes('Thank you for agreeing')) {
+          console.log('License accepted successfully!');
+          return new Response(
+            JSON.stringify({ success: true, message: 'AI license accepted successfully' }),
+            { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+
+        console.error('Error accepting AI license:', error);
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+    }
+
     // Default: Forward to container
     const id = env.VIDEO_PROCESSOR.idFromName("video-processor-ai-thumbnails");
     const stub = env.VIDEO_PROCESSOR.get(id);

@@ -467,26 +467,8 @@ function Feed() {
                         </div>
                       </div>
 
-                      {/* Video Player */}
-                      <Suspense
-                        fallback={
-                          <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]">
-                            <div className="animate-spin text-4xl">⏳</div>
-                          </div>
-                        }
-                      >
-                        <InlineVideoPlayer
-                          videoKey={timelapse.videoKey}
-                          isPlaying={playingVideo === timelapse._id}
-                          onTogglePlay={() => {
-                            if (playingVideo === timelapse._id) {
-                              setPlayingVideo(null)
-                            } else {
-                              setPlayingVideo(timelapse._id)
-                            }
-                          }}
-                        />
-                      </Suspense>
+                      {/* Video Thumbnail */}
+                      <ThumbnailDisplay timelapse={timelapse} />
 
                       {/* Interaction Footer */}
                       <div className="p-4">
@@ -620,5 +602,64 @@ function Feed() {
         <QuickActionButton onClick={() => setShowCreateModal(true)} />
       </div>
     </main>
+  )
+}
+
+// Thumbnail display component (same as TimelapseCard in project detail)
+function ThumbnailDisplay({ timelapse }: { timelapse: any }) {
+  const { data: thumbnailUrl } = useQuery({
+    ...convexQuery(api.r2.getThumbnailUrl, {
+      thumbnailKey: timelapse.thumbnailKey || '',
+    }),
+    enabled: !!timelapse.thumbnailKey,
+  })
+
+  return (
+    <Link
+      to="/timelapse/$timelapseId"
+      params={{ timelapseId: timelapse._id }}
+      className="block"
+    >
+      <div className="aspect-video bg-[#0d1117] flex items-center justify-center relative overflow-hidden border-y border-[#30363d]">
+        {thumbnailUrl ? (
+          <img
+            src={thumbnailUrl}
+            alt="Timelapse thumbnail"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-600/10"></div>
+        )}
+
+        {/* Processing Status Badge */}
+        {timelapse.processingStatus && timelapse.processingStatus !== 'complete' && (
+          <div className="absolute top-3 right-3 z-20">
+            {timelapse.processingStatus === 'failed' ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
+                </svg>
+                Failed
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+                {timelapse.processingStatus === 'pending' ? 'Queued' : 'Processing'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {!thumbnailUrl && (
+          <svg className="w-16 h-16 text-[#8b949e] relative z-10 hover:text-[#58a6ff] transition" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm15 0a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/>
+            <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+          </svg>
+        )}
+      </div>
+    </Link>
   )
 }

@@ -197,29 +197,12 @@ export const listFeed = query({
       .paginate(args.paginationOpts);
 
     // Enrich with project titles and user info
-    const enrichedPage: Array<{
-      _id: any;
-      _creationTime: number;
-      userId: any;
-      projectId: any;
-      projectTitle: string;
-      videoKey: string;
-      thumbnailKey?: string;
-      durationMinutes: number;
-      uploadedAt: number;
-      viewCount: number;
-      likeCount: number;
-      user: {
-        username: string;
-        displayName: string;
-        avatarKey?: string;
-      };
-    }> = [];
+    const enrichedPage = [];
 
     for (const timelapse of result.page) {
       const project = await ctx.db.get(timelapse.projectId);
       const user = await ctx.db.get(timelapse.userId);
-      
+
       if (user) {
         enrichedPage.push({
           ...timelapse,

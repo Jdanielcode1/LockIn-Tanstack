@@ -1,28 +1,42 @@
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery, useQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { api } from '../../convex/_generated/api'
 import { useState, useRef, useEffect } from 'react'
 
 interface InlineVideoPlayerProps {
   videoKey: string
+  thumbnailKey?: string
   isPlaying: boolean
   onTogglePlay: () => void
 }
 
-export function InlineVideoPlayer({ videoKey, isPlaying, onTogglePlay }: InlineVideoPlayerProps) {
-  const { data: videoUrl } = useSuspenseQuery(
-    convexQuery(api.r2.getVideoUrl, { videoKey })
-  )
-
+export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onTogglePlay }: InlineVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(true)
+  const [showVideo, setShowVideo] = useState(false)
+
+  // Fetch thumbnail URL if available
+  const { data: thumbnailUrl, isLoading: thumbnailLoading } = useQuery({
+    ...convexQuery(api.r2.getThumbnailUrl, {
+      thumbnailKey: thumbnailKey || '',
+    }),
+    enabled: !!thumbnailKey,
+  })
+
+  // Only fetch video URL when we need to show the video (after user clicks play or no thumbnail available)
+  const shouldFetchVideo = showVideo || !thumbnailKey
+  const { data: videoUrl } = useQuery({
+    ...convexQuery(api.r2.getVideoUrl, { videoKey }),
+    enabled: shouldFetchVideo,
+  })
 
   useEffect(() => {
     if (videoRef.current) {
       if (isPlaying) {
+        setShowVideo(true) // Load video when play is requested
         videoRef.current.play().catch(console.error)
       } else {
         videoRef.current.pause()
@@ -63,54 +77,86 @@ export function InlineVideoPlayer({ videoKey, isPlaying, onTogglePlay }: InlineV
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
-  if (!videoUrl) {
+  // Show loading state while thumbnail is loading
+  if (thumbnailKey && thumbnailLoading) {
     return (
       <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]">
-        <div className="text-white text-center">
-          <div className="text-4xl mb-2">⚠️</div>
-          <p>Video not available</p>
-        </div>
+        <div className="animate-spin text-4xl">⏳</div>
+      </div>
+    )
+  }
+
+  // If we need video but don't have it yet, show loading
+  if (shouldFetchVideo && !videoUrl) {
+    return (
+      <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]">
+        <div className="animate-spin text-4xl">⏳</div>
       </div>
     )
   }
 
   return (
     <div className="relative group bg-[#0d1117] border-y border-[#30363d]">
-      <video
-        ref={videoRef}
-        className="w-full aspect-video"
-        src={videoUrl}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onEnded={() => onTogglePlay()}
-        muted={isMuted}
-        playsInline
-      />
-      
-      {/* Overlay Controls */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-        {!isPlaying && !isLoading && (
-          <button
-            onClick={onTogglePlay}
-            className="w-20 h-20 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition"
-          >
-            <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
-            </svg>
-          </button>
-        )}
-        
-        {isPlaying && (
-          <button
-            onClick={onTogglePlay}
-            className="w-20 h-20 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition opacity-0 group-hover:opacity-100"
-          >
-            <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
-            </svg>
-          </button>
-        )}
-      </div>
+      {/* Show thumbnail if available and video hasn't been loaded yet */}
+      {!showVideo && thumbnailUrl ? (
+        <>
+          <img
+            src={thumbnailUrl}
+            alt="Video thumbnail"
+            className="w-full aspect-video object-cover"
+          />
+          {/* Large play button overlay on thumbnail */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <button
+              onClick={onTogglePlay}
+              className="w-20 h-20 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition"
+            >
+              <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+              </svg>
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Show video when thumbnail is not available or user has clicked play */}
+          <video
+            ref={videoRef}
+            className="w-full aspect-video"
+            src={videoUrl}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onEnded={() => onTogglePlay()}
+            muted={isMuted}
+            playsInline
+          />
+
+          {/* Overlay Controls */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            {!isPlaying && !isLoading && (
+              <button
+                onClick={onTogglePlay}
+                className="w-20 h-20 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition"
+              >
+                <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+                </svg>
+              </button>
+            )}
+
+            {isPlaying && (
+              <button
+                onClick={onTogglePlay}
+                className="w-20 h-20 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition opacity-0 group-hover:opacity-100"
+              >
+                <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
+                </svg>
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Bottom Controls Bar */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
