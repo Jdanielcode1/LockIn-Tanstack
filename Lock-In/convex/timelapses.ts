@@ -182,11 +182,14 @@ export const listByProject = query({
     })
   ),
   handler: async (ctx, args) => {
-    return await ctx.db
+    const timelapses = await ctx.db
       .query("timelapses")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .order("desc")
       .collect();
+
+    // Filter out failed processing attempts
+    return timelapses.filter(t => t.processingStatus !== "failed");
   },
 });
 
@@ -202,10 +205,15 @@ export const listFeed = query({
       .order("desc")
       .paginate(args.paginationOpts);
 
-    // Enrich with project titles and user info
+    // Enrich with project titles and user info, filtering out failed processing attempts
     const enrichedPage = [];
 
     for (const timelapse of result.page) {
+      // Skip failed processing attempts
+      if (timelapse.processingStatus === "failed") {
+        continue;
+      }
+
       const project = await ctx.db.get(timelapse.projectId);
       const user = await ctx.db.get(timelapse.userId);
 

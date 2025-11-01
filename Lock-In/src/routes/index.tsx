@@ -665,13 +665,16 @@ function ThumbnailDisplay({ timelapse }: { timelapse: any }) {
     }
   }
 
+  // Check if vertical video to apply max height constraint
+  const isVertical = timelapse.videoWidth && timelapse.videoHeight && (timelapse.videoWidth / timelapse.videoHeight) < 0.8
+
   return (
     <Link
       to="/timelapse/$timelapseId"
       params={{ timelapseId: timelapse._id }}
       className="block"
     >
-      <div className={`${getAspectRatioClass()} bg-[#0d1117] flex items-center justify-center relative overflow-hidden border-y border-[#30363d]`}>
+      <div className={`${isVertical ? 'aspect-[9/16] max-h-[600px] mx-auto' : getAspectRatioClass()} bg-[#0d1117] flex items-center justify-center relative overflow-hidden border-y border-[#30363d]`}>
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}

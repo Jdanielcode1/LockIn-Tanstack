@@ -280,14 +280,17 @@ function TimelapseCard({ timelapse, onCancelProcessing }: { timelapse: any; onCa
     }
   }
 
+  // Check if vertical video to apply max height constraint
+  const isVertical = timelapse.videoWidth && timelapse.videoHeight && (timelapse.videoWidth / timelapse.videoHeight) < 0.8
+
   return (
     <Link
       to="/timelapse/$timelapseId"
       params={{ timelapseId: timelapse._id }}
       className="group"
     >
-      <div className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden hover:border-[#8b949e] transition">
-        <div className={`${getAspectRatioClass()} bg-[#0d1117] flex items-center justify-center relative overflow-hidden`}>
+      <div className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden hover:border-[#8b949e] transition flex flex-col">
+        <div className={`${isVertical ? 'aspect-[9/16] max-h-[450px] mx-auto w-full' : getAspectRatioClass()} bg-[#0d1117] flex items-center justify-center relative overflow-hidden`}>
           {thumbnailUrl ? (
             <img
               src={thumbnailUrl}
