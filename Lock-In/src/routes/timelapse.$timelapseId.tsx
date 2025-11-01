@@ -109,7 +109,66 @@ function TimelapseDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
             <div className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden mb-6">
-              <VideoPlayer videoKey={timelapse.videoKey} className="aspect-video" />
+              {/* Show processing state if video is still being processed */}
+              {timelapse.processingStatus && timelapse.processingStatus !== 'complete' ? (
+                <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-b border-[#30363d]">
+                  <div className="text-center px-8 py-12">
+                    {timelapse.processingStatus === 'failed' ? (
+                      <>
+                        <div className="text-6xl mb-4">❌</div>
+                        <h3 className="text-2xl font-bold text-red-400 mb-2">Processing Failed</h3>
+                        <p className="text-[#8b949e] mb-4">
+                          {timelapse.processingError || 'An error occurred while processing your video'}
+                        </p>
+                        <p className="text-sm text-[#8b949e]">
+                          Please try uploading again or contact support if the issue persists.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="relative mb-6">
+                          <svg
+                            className="animate-spin w-16 h-16 text-[#58a6ff] mx-auto"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                        </div>
+                        <h3 className="text-2xl font-bold text-[#c9d1d9] mb-2">
+                          {timelapse.processingStatus === 'pending' ? 'Queued for Processing' : 'Processing Your Timelapse'}
+                        </h3>
+                        <p className="text-[#8b949e] mb-4">
+                          Creating your {timelapse.speedMultiplier || 8}x speed timelapse video...
+                        </p>
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#238636]/10 border border-[#238636]/20 rounded-md text-sm text-[#238636]">
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0Z"/>
+                          </svg>
+                          <span>This may take a few minutes depending on video length</span>
+                        </div>
+                        <p className="text-xs text-[#8b949e] mt-6">
+                          You can navigate away and check back later. The page will update automatically when processing is complete.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <VideoPlayer videoKey={timelapse.videoKey} className="aspect-video" />
+              )}
               <div className="p-6">
                 <Link
                   to="/projects/$projectId"
