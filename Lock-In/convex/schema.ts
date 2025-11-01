@@ -32,16 +32,31 @@ export default defineSchema({
   timelapses: defineTable({
     userId: v.id("users"),
     projectId: v.id("projects"),
-    videoKey: v.string(),
+    videoKey: v.string(), // Main video to display (processed or original)
+    originalVideoKey: v.optional(v.string()), // Original video before processing
+    processedVideoKey: v.optional(v.string()), // Processed timelapse video
     thumbnailKey: v.optional(v.string()),
     durationMinutes: v.number(),
     uploadedAt: v.number(),
     viewCount: v.number(),
     likeCount: v.number(),
+    isTimelapse: v.optional(v.boolean()),
+    speedMultiplier: v.optional(v.number()),
+    originalDuration: v.optional(v.number()),
+    processingStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("complete"),
+        v.literal("failed")
+      )
+    ),
+    processingError: v.optional(v.string()),
   })
     .index("by_project", ["projectId"])
     .index("by_uploaded", ["uploadedAt"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_processing_status", ["processingStatus"]),
 
   likes: defineTable({
     userId: v.id("users"),

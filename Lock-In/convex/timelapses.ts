@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { r2 } from "./r2";
 
@@ -10,6 +10,10 @@ export const create = mutation({
     videoKey: v.string(),
     thumbnailKey: v.optional(v.string()),
     durationMinutes: v.number(),
+    isTimelapse: v.optional(v.boolean()),
+    speedMultiplier: v.optional(v.number()),
+    originalDuration: v.optional(v.number()),
+    requestProcessing: v.optional(v.boolean()), // True if user wants server-side processing
   },
   returns: v.object({
     timelapseId: v.id("timelapses"),
@@ -19,11 +23,16 @@ export const create = mutation({
       userId: args.userId,
       projectId: args.projectId,
       videoKey: args.videoKey,
+      originalVideoKey: args.requestProcessing ? args.videoKey : undefined,
       thumbnailKey: args.thumbnailKey,
       durationMinutes: args.durationMinutes,
       uploadedAt: Date.now(),
       viewCount: 0,
       likeCount: 0,
+      isTimelapse: args.isTimelapse ?? false,
+      speedMultiplier: args.speedMultiplier,
+      originalDuration: args.originalDuration,
+      processingStatus: args.requestProcessing ? "pending" : undefined,
     });
 
     // Update project's completed hours
@@ -45,6 +54,77 @@ export const create = mutation({
   },
 });
 
+export const updateProcessingStatus = mutation({
+  args: {
+    timelapseId: v.id("timelapses"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("complete"),
+      v.literal("failed")
+    ),
+    processedVideoKey: v.optional(v.string()),
+    error: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const timelapse = await ctx.db.get(args.timelapseId);
+    if (!timelapse) return null;
+
+    const updates: any = {
+      processingStatus: args.status,
+    };
+
+    if (args.processedVideoKey) {
+      updates.processedVideoKey = args.processedVideoKey;
+      updates.videoKey = args.processedVideoKey; // Use processed video as main video
+    }
+
+    if (args.error) {
+      updates.processingError = args.error;
+    }
+
+    await ctx.db.patch(args.timelapseId, updates);
+    return null;
+  },
+});
+
+// Internal mutation that can be called from HTTP actions
+export const updateProcessingStatusInternal = internalMutation({
+  args: {
+    timelapseId: v.id("timelapses"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("complete"),
+      v.literal("failed")
+    ),
+    processedVideoKey: v.optional(v.string()),
+    error: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const timelapse = await ctx.db.get(args.timelapseId);
+    if (!timelapse) return null;
+
+    const updates: any = {
+      processingStatus: args.status,
+    };
+
+    if (args.processedVideoKey) {
+      updates.processedVideoKey = args.processedVideoKey;
+      updates.videoKey = args.processedVideoKey; // Use processed video as main video
+    }
+
+    if (args.error) {
+      updates.processingError = args.error;
+    }
+
+    await ctx.db.patch(args.timelapseId, updates);
+    return null;
+  },
+});
+
 export const listByProject = query({
   args: {
     projectId: v.id("projects"),
@@ -56,11 +136,25 @@ export const listByProject = query({
       userId: v.id("users"),
       projectId: v.id("projects"),
       videoKey: v.string(),
+      originalVideoKey: v.optional(v.string()),
+      processedVideoKey: v.optional(v.string()),
       thumbnailKey: v.optional(v.string()),
       durationMinutes: v.number(),
       uploadedAt: v.number(),
       viewCount: v.number(),
       likeCount: v.number(),
+      isTimelapse: v.optional(v.boolean()),
+      speedMultiplier: v.optional(v.number()),
+      originalDuration: v.optional(v.number()),
+      processingStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("complete"),
+          v.literal("failed")
+        )
+      ),
+      processingError: v.optional(v.string()),
     })
   ),
   handler: async (ctx, args) => {
@@ -140,11 +234,25 @@ export const get = query({
       projectId: v.id("projects"),
       projectTitle: v.string(),
       videoKey: v.string(),
+      originalVideoKey: v.optional(v.string()),
+      processedVideoKey: v.optional(v.string()),
       thumbnailKey: v.optional(v.string()),
       durationMinutes: v.number(),
       uploadedAt: v.number(),
       viewCount: v.number(),
       likeCount: v.number(),
+      isTimelapse: v.optional(v.boolean()),
+      speedMultiplier: v.optional(v.number()),
+      originalDuration: v.optional(v.number()),
+      processingStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("complete"),
+          v.literal("failed")
+        )
+      ),
+      processingError: v.optional(v.string()),
     }),
     v.null()
   ),

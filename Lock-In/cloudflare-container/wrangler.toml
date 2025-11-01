@@ -1,0 +1,29 @@
+name = "video-processor-container"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Enable container logs
+[observability]
+enabled = true
+
+# Container configuration
+[[containers]]
+class_name = "VideoProcessor"
+image = "./Dockerfile"
+max_instances = 10
+
+[[durable_objects.bindings]]
+class_name = "VideoProcessor"
+name = "VIDEO_PROCESSOR"
+
+[[migrations]]
+new_sqlite_classes = ["VideoProcessor"]
+tag = "v1"
+
+# Environment variables (set using wrangler secret put)
+# R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, CONVEX_URL
+# Run: wrangler secret put R2_ENDPOINT
+#      wrangler secret put R2_ACCESS_KEY_ID
+#      wrangler secret put R2_SECRET_ACCESS_KEY
+#      wrangler secret put R2_BUCKET
+#      wrangler secret put CONVEX_URL

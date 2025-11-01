@@ -1,0 +1,8 @@
+name = "video-processor-worker"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Environment variables
+[vars]
+# CONTAINER_URL = "https://your-container.containers.cloud.cloudflare.com"
+# CONVEX_URL = "https://your-convex-deployment.convex.cloud"

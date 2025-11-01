@@ -98,15 +98,16 @@ export function ContributionHeatmap({ data, year }: ContributionHeatmapProps) {
     <div className="relative">
       <style>{`
         .contribution-graph {
-          --square-size: 11px;
-          --square-gap: 3px;
+          --square-size: 13px;
+          --square-gap: 2px;
           --week-width: calc(var(--square-size) + var(--square-gap));
         }
       `}</style>
 
-      <div className="contribution-graph inline-grid gap-2" style={{
+      <div className="contribution-graph inline-grid" style={{
         gridTemplateAreas: '"empty months" "days squares"',
         gridTemplateColumns: 'auto 1fr',
+        gap: '8px 10px',
       }}>
         {/* Empty corner */}
         <div style={{ gridArea: 'empty' }} />
@@ -125,11 +126,12 @@ export function ContributionHeatmap({ data, year }: ContributionHeatmapProps) {
           {monthLabels.map((month, idx) => (
             <div
               key={idx}
-              className="text-xs text-[#8b949e]"
+              className="text-[11px] text-[#8b949e]"
               style={{
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                paddingLeft: '2px'
               }}
             >
               {month.name}
@@ -146,15 +148,15 @@ export function ContributionHeatmap({ data, year }: ContributionHeatmapProps) {
             gap: 'var(--square-gap)',
             alignContent: 'start',
           }}
-          className="text-[9px] text-[#8b949e]"
+          className="text-[10px] text-[#8b949e]"
         >
-          <div>Mon</div>
-          <div style={{ visibility: 'hidden' }}>Tue</div>
-          <div>Wed</div>
-          <div style={{ visibility: 'hidden' }}>Thu</div>
-          <div>Fri</div>
-          <div style={{ visibility: 'hidden' }}>Sat</div>
-          <div style={{ visibility: 'hidden' }}>Sun</div>
+          <div style={{ lineHeight: 'var(--square-size)' }}>Mon</div>
+          <div style={{ visibility: 'hidden', lineHeight: 'var(--square-size)' }}>Tue</div>
+          <div style={{ lineHeight: 'var(--square-size)' }}>Wed</div>
+          <div style={{ visibility: 'hidden', lineHeight: 'var(--square-size)' }}>Thu</div>
+          <div style={{ lineHeight: 'var(--square-size)' }}>Fri</div>
+          <div style={{ visibility: 'hidden', lineHeight: 'var(--square-size)' }}>Sat</div>
+          <div style={{ visibility: 'hidden', lineHeight: 'var(--square-size)' }}>Sun</div>
         </div>
 
         {/* Contribution squares */}
@@ -173,9 +175,9 @@ export function ContributionHeatmap({ data, year }: ContributionHeatmapProps) {
               key={idx}
               onMouseEnter={() => day && setHoveredDay(day)}
               onMouseLeave={() => setHoveredDay(null)}
-              className={`rounded-sm transition-all border border-[#1b1f23] ${
-                day ? getColor(day.count) : 'bg-transparent border-transparent'
-              } ${day && day.count > 0 ? 'hover:ring-1 hover:ring-[#8b949e] cursor-pointer' : ''}`}
+              className={`rounded-[2px] transition-all ${
+                day ? `${getColor(day.count)} border border-[#1b1f23]/40` : 'bg-transparent'
+              } ${day && day.count > 0 ? 'hover:ring-1 hover:ring-white/30 cursor-pointer' : ''}`}
               title={day ? `${day.date}: ${day.count} uploads` : ''}
               style={{
                 width: 'var(--square-size)',
@@ -200,14 +202,14 @@ export function ContributionHeatmap({ data, year }: ContributionHeatmapProps) {
       )}
 
       {/* Legend */}
-      <div className="flex items-center gap-1 text-xs text-[#8b949e] mt-3 justify-end">
+      <div className="flex items-center gap-1.5 text-xs text-[#8b949e] mt-4 justify-end">
         <span>Less</span>
-        <div className="flex gap-[3px]">
-          <div className="w-[10px] h-[10px] rounded-sm bg-[#161b22] border border-[#1b1f23]"></div>
-          <div className="w-[10px] h-[10px] rounded-sm bg-[#0e4429] border border-[#1b1f23]"></div>
-          <div className="w-[10px] h-[10px] rounded-sm bg-[#006d32] border border-[#1b1f23]"></div>
-          <div className="w-[10px] h-[10px] rounded-sm bg-[#26a641] border border-[#1b1f23]"></div>
-          <div className="w-[10px] h-[10px] rounded-sm bg-[#39d353] border border-[#1b1f23]"></div>
+        <div className="flex gap-[2px]">
+          <div className="w-[11px] h-[11px] rounded-[2px] bg-[#161b22] border border-[#1b1f23]/40"></div>
+          <div className="w-[11px] h-[11px] rounded-[2px] bg-[#0e4429] border border-[#1b1f23]/40"></div>
+          <div className="w-[11px] h-[11px] rounded-[2px] bg-[#006d32] border border-[#1b1f23]/40"></div>
+          <div className="w-[11px] h-[11px] rounded-[2px] bg-[#26a641] border border-[#1b1f23]/40"></div>
+          <div className="w-[11px] h-[11px] rounded-[2px] bg-[#39d353] border border-[#1b1f23]/40"></div>
         </div>
         <span>More</span>
       </div>
