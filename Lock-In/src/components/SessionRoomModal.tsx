@@ -17,6 +17,8 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const { user } = useUser()
   const [isStarting, setIsStarting] = useState(false)
   const [meeting, initMeeting] = useRealtimeKitClient()
+  const [openaiConnection, setOpenaiConnection] = useState<RTCPeerConnection | null>(null)
+  const [aiAgentConnected, setAiAgentConnected] = useState(false)
 
   // Fetch session details
   const { data: session } = useSuspenseQuery(
@@ -33,6 +35,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   )
 
   const initializeMeetingAction = useAction(api.realtimeActions.initializeMeeting)
+  const generateOpenAITokenAction = useAction(api.openaiRealtime.generateEphemeralToken)
   const leaveMutation = useMutation(api.lockInSessions.leave)
   const endMutation = useMutation(api.lockInSessions.end)
 
@@ -49,6 +52,94 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
       })
     }
   }, [session?.status, session?.realtimeKitAuthToken, meeting, initMeeting])
+
+  // Initialize OpenAI Realtime API when AI agent is enabled and session is active
+  useEffect(() => {
+    if (!session?.aiAgentEnabled || session.status !== 'active' || !meeting || openaiConnection || aiAgentConnected) {
+      return
+    }
+
+    let pc: RTCPeerConnection | null = null
+
+    const initializeOpenAI = async () => {
+      try {
+        console.log('Initializing OpenAI Realtime API for AI assistant')
+
+        // Get ephemeral token from Convex
+        const tokenResult = await generateOpenAITokenAction({ sessionId })
+
+        if (!tokenResult.success || !tokenResult.token) {
+          console.error('Failed to get OpenAI token:', tokenResult.error)
+          return
+        }
+
+        // Create RTCPeerConnection
+        pc = new RTCPeerConnection()
+
+        // Set up audio track to receive AI voice
+        pc.ontrack = (event) => {
+          console.log('Received audio track from OpenAI')
+          const audioTrack = event.track
+
+          // Add AI audio to RealtimeKit meeting
+          if (meeting.peer) {
+            const sender = meeting.peer.addTrack(audioTrack, event.streams[0])
+            console.log('Added OpenAI audio track to RealtimeKit meeting')
+          }
+        }
+
+        // Add microphone audio to send to OpenAI
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream.getTracks().forEach((track) => {
+          pc?.addTrack(track, stream)
+        })
+
+        // Create offer and set local description
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+
+        // Send offer to OpenAI and get answer
+        const response = await fetch('https://api.openai.com/v1/realtime', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${tokenResult.token}`,
+            'Content-Type': 'application/sdp',
+          },
+          body: offer.sdp,
+        })
+
+        if (!response.ok) {
+          throw new Error(`OpenAI connection failed: ${response.status}`)
+        }
+
+        const answerSdp = await response.text()
+        await pc.setRemoteDescription({
+          type: 'answer',
+          sdp: answerSdp,
+        })
+
+        setOpenaiConnection(pc)
+        setAiAgentConnected(true)
+        console.log('OpenAI Realtime API connected successfully')
+      } catch (error) {
+        console.error('Error initializing OpenAI:', error)
+        if (pc) {
+          pc.close()
+        }
+      }
+    }
+
+    initializeOpenAI()
+
+    // Cleanup on unmount
+    return () => {
+      if (pc) {
+        pc.close()
+        setOpenaiConnection(null)
+        setAiAgentConnected(false)
+      }
+    }
+  }, [session?.aiAgentEnabled, session?.status, meeting, openaiConnection, aiAgentConnected, generateOpenAITokenAction, sessionId])
 
   const handleLeave = async () => {
     if (!user) return
@@ -352,11 +443,11 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-[#e6edf3]">AI Assistant</h3>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    session.aiAgentActive
+                    aiAgentConnected
                       ? 'bg-[#238636]/20 text-[#3fb950]'
                       : 'bg-[#6e7681]/20 text-[#8b949e]'
                   }`}>
-                    {session.aiAgentActive ? 'Active' : 'Ready'}
+                    {aiAgentConnected ? 'Connected' : 'Ready'}
                   </span>
                 </div>
                 <p className="text-xs text-[#8b949e] mb-3">

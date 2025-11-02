@@ -1,0 +1,73 @@
+import { v } from "convex/values";
+import { action } from "./_generated/server";
+
+// Generate an ephemeral token for OpenAI Realtime API
+// This token is valid for 60 seconds and allows WebRTC connection
+export const generateEphemeralToken = action({
+  args: {
+    sessionId: v.id("lockInSessions"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    token: v.optional(v.string()),
+    error: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const openaiApiKey = process.env.OPENAI_API_KEY!;
+
+    if (!openaiApiKey) {
+      return {
+        success: false,
+        error: "OpenAI API key not configured",
+      };
+    }
+
+    try {
+      // Call OpenAI API to create an ephemeral session token
+      const response = await fetch(
+        "https://api.openai.com/v1/realtime/sessions",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${openaiApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-realtime-preview-2024-12-17",
+            voice: "verse",
+            instructions: "You are a helpful AI coding assistant in a Lock-In work session. Users are working on programming projects and may ask you questions about their code, debugging help, or general programming advice. Be concise and helpful. Listen for users to say 'hey agent' followed by their question.",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Failed to create OpenAI session:", errorText);
+        return {
+          success: false,
+          error: `Failed to create session: ${response.status}`,
+        };
+      }
+
+      const data = (await response.json()) as {
+        client_secret: {
+          value: string;
+          expires_at: number;
+        };
+      };
+
+      console.log("Generated OpenAI ephemeral token for session:", args.sessionId);
+
+      return {
+        success: true,
+        token: data.client_secret.value,
+      };
+    } catch (error: any) {
+      console.error("Error generating OpenAI ephemeral token:", error);
+      return {
+        success: false,
+        error: error.message || "Unknown error",
+      };
+    }
+  },
+});
