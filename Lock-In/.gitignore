@@ -25,3 +25,8 @@ node_modules
 /playwright/.cache/
 
 app.config.timestamp_*.js
+
+# Cloudflare Workers (separate project)
+cloudflare-realtime-agent/node_modules
+cloudflare-realtime-agent/.wrangler
+cloudflare-realtime-agent/dist

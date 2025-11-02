@@ -8,9 +8,11 @@
  * @module
  */
 
+import type * as aiAssistance from "../aiAssistance.js";
 import type * as challenges from "../challenges.js";
 import type * as http from "../http.js";
 import type * as leaderboard from "../leaderboard.js";
+import type * as lockInSessions from "../lockInSessions.js";
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
 import type * as social from "../social.js";
@@ -33,9 +35,11 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  aiAssistance: typeof aiAssistance;
   challenges: typeof challenges;
   http: typeof http;
   leaderboard: typeof leaderboard;
+  lockInSessions: typeof lockInSessions;
   projects: typeof projects;
   r2: typeof r2;
   social: typeof social;

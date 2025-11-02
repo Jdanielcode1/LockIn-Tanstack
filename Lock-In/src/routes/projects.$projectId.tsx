@@ -6,6 +6,9 @@ import { api } from '../../convex/_generated/api'
 import { useState } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { VideoUpload } from '../components/VideoUpload'
+import { CreateSessionModal } from '../components/CreateSessionModal'
+import { SessionRoomModal } from '../components/SessionRoomModal'
+import { useUser } from '../components/UserProvider'
 
 export const Route = createFileRoute('/projects/$projectId')({
   component: ProjectDetail,
@@ -13,7 +16,10 @@ export const Route = createFileRoute('/projects/$projectId')({
 
 function ProjectDetail() {
   const { projectId } = Route.useParams()
+  const { user } = useUser()
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showSessionModal, setShowSessionModal] = useState(false)
+  const [activeSessionId, setActiveSessionId] = useState<Id<'lockInSessions'> | null>(null)
 
   console.log('🎯 ProjectDetail component rendered with projectId:', projectId)
 
@@ -200,7 +206,17 @@ function ProjectDetail() {
                 </p>
                 <p className="text-2xl font-bold text-[#c9d1d9]">{project.completedHours.toFixed(1)}h</p>
               </div>
-              <div className="flex items-end justify-end">
+              <div className="flex items-end justify-end gap-3">
+                <button
+                  onClick={() => setShowSessionModal(true)}
+                  className="bg-[#58a6ff] hover:bg-[#79c0ff] text-white px-6 py-2.5 rounded-md transition font-medium text-sm flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm15 0a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/>
+                    <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+                  </svg>
+                  Start Lock In Session
+                </button>
                 <button
                   onClick={() => setShowUploadModal(true)}
                   className="bg-[#238636] hover:bg-[#2ea043] text-white px-6 py-2.5 rounded-md transition font-medium text-sm flex items-center gap-2"
@@ -242,6 +258,24 @@ function ProjectDetail() {
             projectId={projectId as Id<'projects'>}
             onComplete={() => setShowUploadModal(false)}
             onCancel={() => setShowUploadModal(false)}
+          />
+        )}
+
+        {showSessionModal && user && (
+          <CreateSessionModal
+            userId={user.userId}
+            defaultProjectId={projectId as Id<'projects'>}
+            onClose={() => setShowSessionModal(false)}
+            onSessionCreated={(sessionId) => {
+              setActiveSessionId(sessionId)
+            }}
+          />
+        )}
+
+        {activeSessionId && (
+          <SessionRoomModal
+            sessionId={activeSessionId}
+            onClose={() => setActiveSessionId(null)}
           />
         )}
       </div>

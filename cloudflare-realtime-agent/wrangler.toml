@@ -1,0 +1,24 @@
+name = "lockin-realtime-agent"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare AI binding
+[ai]
+binding = "AI"
+
+# Durable Object for the Realtime Agent
+[[durable_objects.bindings]]
+class_name = "LockInAgent"
+name = "LOCKIN_AGENT"
+
+[[migrations]]
+new_sqlite_classes = ["LockInAgent"]
+tag = "v1"
+
+# Environment variables (set using wrangler secret put)
+# ACCOUNT_ID - Cloudflare account ID
+# API_TOKEN - Cloudflare API token (Realtime Admin access)
+# DEEPGRAM_API_KEY - Speech-to-text API key
+# ELEVENLABS_API_KEY - Text-to-speech API key
+# CONVEX_URL - Convex backend URL for logging

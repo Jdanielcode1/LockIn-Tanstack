@@ -54,6 +54,10 @@ export default defineSchema({
       )
     ),
     processingError: v.optional(v.string()),
+    processingStage: v.optional(v.string()), // Current processing stage
+    processingProgress: v.optional(v.number()), // Progress percentage (0-100)
+    processingStartedAt: v.optional(v.number()), // When processing started
+    processingCompletedAt: v.optional(v.number()), // When processing completed
   })
     .index("by_project", ["projectId"])
     .index("by_uploaded", ["uploadedAt"])
@@ -104,4 +108,57 @@ export default defineSchema({
     .index("by_challenge", ["challengeId"])
     .index("by_user", ["userId"])
     .index("by_challenge_and_user", ["challengeId", "userId"]),
+
+  lockInSessions: defineTable({
+    creatorId: v.id("users"),
+    projectId: v.optional(v.id("projects")), // Link to project for context
+    title: v.string(),
+    description: v.string(),
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("active"),
+      v.literal("ended")
+    ),
+    scheduledStartTime: v.number(),
+    actualStartTime: v.optional(v.number()),
+    endTime: v.optional(v.number()),
+    maxParticipants: v.number(),
+    realtimeKitMeetingId: v.optional(v.string()), // Cloudflare RealtimeKit meeting ID
+    realtimeKitAuthToken: v.optional(v.string()), // Auth token for joining
+    aiAgentEnabled: v.boolean(),
+    aiAgentActive: v.optional(v.boolean()),
+    sessionType: v.union(
+      v.literal("coding"),
+      v.literal("study"),
+      v.literal("general")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_creator", ["creatorId"])
+    .index("by_status", ["status"])
+    .index("by_scheduled_time", ["scheduledStartTime"])
+    .index("by_project", ["projectId"]),
+
+  sessionParticipants: defineTable({
+    sessionId: v.id("lockInSessions"),
+    userId: v.id("users"),
+    joinedAt: v.number(),
+    leftAt: v.optional(v.number()),
+    isActive: v.boolean(),
+    isModerator: v.boolean(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_user", ["userId"])
+    .index("by_session_and_user", ["sessionId", "userId"]),
+
+  aiAssistanceLogs: defineTable({
+    sessionId: v.id("lockInSessions"),
+    userId: v.id("users"),
+    question: v.string(),
+    response: v.string(),
+    timestamp: v.number(),
+    helpful: v.optional(v.boolean()), // User feedback
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_user", ["userId"]),
 });

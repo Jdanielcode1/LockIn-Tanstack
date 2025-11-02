@@ -1,0 +1,27 @@
+{
+  "name": "lockin-realtime-agent",
+  "version": "1.0.0",
+  "description": "AI-powered coding assistant for Lock In Sessions",
+  "main": "src/index.ts",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "ai",
+    "realtime"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.94.0"
+  },
+  "dependencies": {
+    "@cloudflare/realtime-agents": "^0.0.6"
+  }
+}
