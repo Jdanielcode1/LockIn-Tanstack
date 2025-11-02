@@ -15,6 +15,7 @@ import type * as leaderboard from "../leaderboard.js";
 import type * as lockInSessions from "../lockInSessions.js";
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
+import type * as realtimeActions from "../realtimeActions.js";
 import type * as social from "../social.js";
 import type * as stats from "../stats.js";
 import type * as timelapses from "../timelapses.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   lockInSessions: typeof lockInSessions;
   projects: typeof projects;
   r2: typeof r2;
+  realtimeActions: typeof realtimeActions;
   social: typeof social;
   stats: typeof stats;
   timelapses: typeof timelapses;

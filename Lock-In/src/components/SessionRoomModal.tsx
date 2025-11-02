@@ -1,9 +1,12 @@
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { useMutation } from 'convex/react'
+import { useMutation, useAction } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import { useUser } from './UserProvider'
+import { useState, useEffect } from 'react'
+import { useRealtimeKitClient, RealtimeKitProvider } from '@cloudflare/realtimekit-react'
+import { RtkMeeting } from '@cloudflare/realtimekit-react-ui'
 
 interface SessionRoomModalProps {
   sessionId: Id<'lockInSessions'>
@@ -12,6 +15,8 @@ interface SessionRoomModalProps {
 
 export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) {
   const { user } = useUser()
+  const [isStarting, setIsStarting] = useState(false)
+  const [meeting, initMeeting] = useRealtimeKitClient()
 
   // Fetch session details
   const { data: session } = useSuspenseQuery(
@@ -21,14 +26,29 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   )
 
   // Fetch participants
-  const { data: participants } = useSuspenseQuery(
+  const { data: participants} = useSuspenseQuery(
     convexQuery(api.lockInSessions.getParticipants, {
       sessionId,
     })
   )
 
+  const initializeMeetingAction = useAction(api.realtimeActions.initializeMeeting)
   const leaveMutation = useMutation(api.lockInSessions.leave)
   const endMutation = useMutation(api.lockInSessions.end)
+
+  // Initialize RealtimeKit when session becomes active and has auth token
+  useEffect(() => {
+    if (session?.status === 'active' && session.realtimeKitAuthToken && !meeting) {
+      console.log('Initializing RealtimeKit meeting with token')
+      initMeeting({
+        authToken: session.realtimeKitAuthToken,
+        defaults: {
+          audio: true,
+          video: true,
+        },
+      })
+    }
+  }, [session?.status, session?.realtimeKitAuthToken, meeting, initMeeting])
 
   const handleLeave = async () => {
     if (!user) return
@@ -57,6 +77,31 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     } catch (error) {
       console.error('Error ending session:', error)
       alert('Failed to end session')
+    }
+  }
+
+  const handleStartSession = async () => {
+    if (!user) return
+
+    setIsStarting(true)
+    try {
+      const result = await initializeMeetingAction({
+        sessionId,
+        userId: user.userId,
+      })
+
+      if (!result.success) {
+        alert(`Failed to start session: ${result.error}`)
+        setIsStarting(false)
+        return
+      }
+
+      console.log('Session started successfully:', result)
+      // The session data will automatically update via Convex reactivity
+    } catch (error) {
+      console.error('Error starting session:', error)
+      alert('Failed to start session. Please try again.')
+      setIsStarting(false)
     }
   }
 
@@ -151,37 +196,62 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
               )}
             </div>
 
-            {/* Video Meeting Placeholder */}
-            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-12">
-              <div className="text-center">
-                <svg
-                  className="h-16 w-16 mx-auto text-[#8b949e] mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                  />
-                </svg>
-                <h3 className="text-lg font-medium text-[#e6edf3] mb-2">
-                  Video Meeting
-                </h3>
-                <p className="text-sm text-[#8b949e] mb-4">
-                  RealtimeKit video integration ready to implement
-                </p>
-                <div className="bg-[#0d1117] border border-[#30363d] rounded-md p-4 text-left max-w-md mx-auto">
-                  <p className="text-xs text-[#6e7681] mb-2">Next Steps:</p>
-                  <ul className="text-xs text-[#8b949e] space-y-1">
-                    <li>• Initialize RealtimeKit meeting on session start</li>
-                    <li>• Integrate WebRTC video/audio streams</li>
-                    <li>• Connect AI agent to meeting audio</li>
-                  </ul>
+            {/* Video Meeting */}
+            <div className="rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden">
+              {!isActive ? (
+                <div className="p-12 text-center">
+                  <svg
+                    className="h-16 w-16 mx-auto text-[#8b949e] mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <h3 className="text-lg font-medium text-[#e6edf3] mb-2">
+                    Video Meeting
+                  </h3>
+
+                  {isCreator ? (
+                    <>
+                      <p className="text-sm text-[#8b949e] mb-4">
+                        Start the session to initialize the video meeting
+                      </p>
+                      <button
+                        onClick={handleStartSession}
+                        disabled={isStarting}
+                        className="px-6 py-3 bg-[#238636] text-white rounded-md hover:bg-[#2ea043] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isStarting ? 'Starting...' : 'Start Session'}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-sm text-[#8b949e] mb-4">
+                      Waiting for host to start the session...
+                    </p>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div style={{ height: '600px' }} className="bg-[#0d1117]">
+                  {meeting ? (
+                    <RealtimeKitProvider value={meeting}>
+                      <RtkMeeting mode="fill" meeting={meeting} />
+                    </RealtimeKitProvider>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <div className="animate-spin text-4xl mb-4">⏳</div>
+                        <p className="text-[#8b949e]">Connecting to video session...</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Controls */}
