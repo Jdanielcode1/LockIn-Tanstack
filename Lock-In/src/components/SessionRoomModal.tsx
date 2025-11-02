@@ -4,7 +4,7 @@ import { useMutation, useAction } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import { useUser } from './UserProvider'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRealtimeKitClient, RealtimeKitProvider } from '@cloudflare/realtimekit-react'
 import { RtkMeeting } from '@cloudflare/realtimekit-react-ui'
 
@@ -19,6 +19,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const [meeting, initMeeting] = useRealtimeKitClient()
   const [openaiConnection, setOpenaiConnection] = useState<RTCPeerConnection | null>(null)
   const [aiAgentConnected, setAiAgentConnected] = useState(false)
+  const openaiInitializedRef = useRef(false)
 
   // Fetch session details
   const { data: session } = useSuspenseQuery(
@@ -55,6 +56,11 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
 
   // Initialize OpenAI Realtime API when AI agent is enabled and session is active
   useEffect(() => {
+    // Prevent re-initialization if already initialized
+    if (openaiInitializedRef.current) {
+      return
+    }
+
     if (!session?.aiAgentEnabled || session.status !== 'active' || !meeting || openaiConnection || aiAgentConnected) {
       return
     }
@@ -76,30 +82,89 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
         // Create RTCPeerConnection
         pc = new RTCPeerConnection()
 
+        // Create audio element to play OpenAI's voice responses
+        const audioEl = document.createElement('audio')
+        audioEl.autoplay = true
+
         // Set up audio track to receive AI voice
         pc.ontrack = (event) => {
           console.log('Received audio track from OpenAI')
-          const audioTrack = event.track
+          audioEl.srcObject = event.streams[0]
 
-          // Add AI audio to RealtimeKit meeting
+          // Also add AI audio to RealtimeKit meeting so other participants can hear
           if (meeting.peer) {
-            const sender = meeting.peer.addTrack(audioTrack, event.streams[0])
+            const audioTrack = event.track
+            meeting.peer.addTrack(audioTrack, event.streams[0])
             console.log('Added OpenAI audio track to RealtimeKit meeting')
           }
         }
 
-        // Add microphone audio to send to OpenAI
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        stream.getTracks().forEach((track) => {
-          pc?.addTrack(track, stream)
+        // Set up data channel for receiving OpenAI events
+        const dc = pc.createDataChannel('oai-events')
+
+        dc.addEventListener('message', (e) => {
+          try {
+            const event = JSON.parse(e.data)
+            console.log('OpenAI event:', event)
+
+            // Handle different event types
+            switch (event.type) {
+              case 'session.created':
+                console.log('✅ OpenAI session created:', event.session.id)
+                break
+              case 'input_audio_buffer.speech_started':
+                console.log('🎤 User started speaking')
+                break
+              case 'input_audio_buffer.speech_stopped':
+                console.log('🎤 User stopped speaking')
+                break
+              case 'response.audio.delta':
+                console.log('🤖 AI is speaking')
+                break
+              case 'response.done':
+                console.log('✅ AI response complete')
+                break
+              case 'error':
+                console.error('❌ OpenAI error:', event.error)
+                break
+            }
+          } catch (error) {
+            console.error('Error parsing OpenAI event:', error)
+          }
         })
+
+        dc.addEventListener('open', () => {
+          console.log('✅ OpenAI data channel opened')
+        })
+
+        dc.addEventListener('error', (error) => {
+          console.error('❌ OpenAI data channel error:', error)
+        })
+
+        // Get audio from existing RealtimeKit meeting
+        const senders = meeting.peer?.getSenders()
+        const audioSender = senders?.find(s => s.track?.kind === 'audio')
+
+        if (audioSender && audioSender.track) {
+          // Use the existing audio track from RealtimeKit
+          const stream = new MediaStream([audioSender.track])
+          pc.addTrack(audioSender.track, stream)
+          console.log('Added RealtimeKit audio to OpenAI connection')
+        } else {
+          // Fallback: get new mic stream if RealtimeKit audio isn't available
+          console.warn('No RealtimeKit audio found, requesting new microphone stream')
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          stream.getTracks().forEach((track) => {
+            pc?.addTrack(track, stream)
+          })
+        }
 
         // Create offer and set local description
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
 
         // Send offer to OpenAI and get answer
-        const response = await fetch('https://api.openai.com/v1/realtime', {
+        const response = await fetch('https://api.openai.com/v1/realtime/calls', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${tokenResult.token}`,
@@ -120,6 +185,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
 
         setOpenaiConnection(pc)
         setAiAgentConnected(true)
+        openaiInitializedRef.current = true
         console.log('OpenAI Realtime API connected successfully')
       } catch (error) {
         console.error('Error initializing OpenAI:', error)
@@ -137,9 +203,10 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
         pc.close()
         setOpenaiConnection(null)
         setAiAgentConnected(false)
+        openaiInitializedRef.current = false
       }
     }
-  }, [session?.aiAgentEnabled, session?.status, meeting, openaiConnection, aiAgentConnected, generateOpenAITokenAction, sessionId])
+  }, [session?.aiAgentEnabled, session?.status, meeting, sessionId])
 
   const handleLeave = async () => {
     if (!user) return
