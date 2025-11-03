@@ -77,6 +77,44 @@ function ProjectsList() {
     convexQuery(api.stats.getActivityFeed, { limit: 15 })
   )
 
+  // Fetch follower/following counts and challenges
+  const { data: followerCount } = useQuery({
+    ...convexQuery(api.follows.getFollowerCount, {
+      userId: user?.userId!,
+    }),
+    enabled: !!user,
+  })
+
+  const { data: followingCount } = useQuery({
+    ...convexQuery(api.follows.getFollowingCount, {
+      userId: user?.userId!,
+    }),
+    enabled: !!user,
+  })
+
+  const { data: userChallenges } = useQuery({
+    ...convexQuery(api.challenges.getUserChallenges, {
+      userId: user?.userId!,
+    }),
+    enabled: !!user,
+  })
+
+  // Fetch user achievements
+  const { data: achievements } = useQuery({
+    ...convexQuery(api.achievements.getUserAchievements, {
+      userId: user?.userId!,
+    }),
+    enabled: !!user,
+  })
+
+  // Fetch user's clubs
+  const { data: userClubsData } = useQuery({
+    ...convexQuery(api.clubs.list, {
+      limit: 10,
+    }),
+    enabled: !!user,
+  })
+
   const handleProjectClick = (projectId: string) => {
     navigate({ 
       to: '/projects/$projectId', 
@@ -100,9 +138,22 @@ function ProjectsList() {
               <h1 className="text-2xl font-semibold text-[#c9d1d9] mb-1">
                 {profileData?.displayName || 'Loading...'}
               </h1>
-              <p className="text-xl text-[#8b949e] font-light">
+              <p className="text-xl text-[#8b949e] font-light mb-2">
                 {profileData?.username || ''}
               </p>
+              {/* Followers/Following - GitHub style */}
+              <div className="flex items-center gap-1 text-sm text-[#8b949e]">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.493 3.493 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Zm-5.5-.5a2 2 0 1 0-.001 3.999A2 2 0 0 0 5.5 3.5Z"/>
+                </svg>
+                <button className="hover:text-[#58a6ff] transition">
+                  <span className="font-semibold text-[#c9d1d9]">{followerCount || 0}</span> followers
+                </button>
+                <span>·</span>
+                <button className="hover:text-[#58a6ff] transition">
+                  <span className="font-semibold text-[#c9d1d9]">{followingCount || 0}</span> following
+                </button>
+              </div>
             </div>
 
             {/* Edit Profile Button */}
@@ -132,8 +183,36 @@ function ProjectsList() {
               </div>
             )}
 
+            {/* Achievements Section */}
+            {achievements && achievements.filter((a) => a.earned).length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-base font-semibold text-[#c9d1d9] mb-3">Achievements</h3>
+                <div className="grid grid-cols-4 gap-2">
+                  {achievements
+                    .filter((a) => a.earned)
+                    .slice(0, 8)
+                    .map((achievement) => (
+                      <div
+                        key={achievement.id}
+                        className="relative group"
+                        title={`${achievement.name}: ${achievement.description}`}
+                      >
+                        <div className="w-full aspect-square rounded-full bg-gradient-to-br from-blue-500/20 to-purple-600/20 border-2 border-[#30363d] flex items-center justify-center text-3xl hover:scale-110 transition cursor-pointer group-hover:border-[#58a6ff]">
+                          {achievement.icon}
+                        </div>
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-xs text-[#c9d1d9] whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-10 shadow-lg">
+                          <div className="font-semibold">{achievement.name}</div>
+                          <div className="text-[#8b949e]">{achievement.description}</div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Stats - Compact */}
-            <div className="border-t border-[#30363d] pt-4 space-y-2 text-sm">
+            <div className="border-t border-[#30363d] pt-4 space-y-2 text-sm mb-4">
               <div className="flex justify-between">
                 <span className="text-[#8b949e]">Projects</span>
                 <span className="text-[#c9d1d9] font-semibold">{stats.totalProjects}</span>
@@ -146,7 +225,40 @@ function ProjectsList() {
                 <span className="text-[#8b949e]">Uploads</span>
                 <span className="text-[#c9d1d9] font-semibold">{stats.totalTimelapses}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-[#8b949e]">Challenges</span>
+                <span className="text-[#c9d1d9] font-semibold">
+                  {userChallenges?.filter((c) => c.isActive).length || 0}
+                </span>
+              </div>
             </div>
+
+            {/* Clubs/Organizations Section */}
+            {userClubsData && userClubsData.length > 0 && (
+              <div className="border-t border-[#30363d] pt-4">
+                <h3 className="text-base font-semibold text-[#c9d1d9] mb-3">Clubs</h3>
+                <div className="grid grid-cols-4 gap-2">
+                  {userClubsData.slice(0, 8).map((club) => (
+                    <div
+                      key={club._id}
+                      className="relative group"
+                      title={club.name}
+                    >
+                      <div className="w-full aspect-square rounded-md bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-[#30363d] flex items-center justify-center hover:border-[#58a6ff] transition cursor-pointer">
+                        <span className="text-2xl font-bold text-[#c9d1d9]">
+                          {club.name.substring(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-xs text-[#c9d1d9] whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-10 shadow-lg">
+                        <div className="font-semibold">{club.name}</div>
+                        <div className="text-[#8b949e]">{club.memberCount} members</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </aside>
 
           {/* Right Content Area */}

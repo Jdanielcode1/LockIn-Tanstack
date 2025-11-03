@@ -8,8 +8,11 @@
  * @module
  */
 
+import type * as achievements from "../achievements.js";
 import type * as aiAssistance from "../aiAssistance.js";
 import type * as challenges from "../challenges.js";
+import type * as clubs from "../clubs.js";
+import type * as follows from "../follows.js";
 import type * as http from "../http.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as lockInSessions from "../lockInSessions.js";
@@ -37,8 +40,11 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  achievements: typeof achievements;
   aiAssistance: typeof aiAssistance;
   challenges: typeof challenges;
+  clubs: typeof clubs;
+  follows: typeof follows;
   http: typeof http;
   leaderboard: typeof leaderboard;
   lockInSessions: typeof lockInSessions;

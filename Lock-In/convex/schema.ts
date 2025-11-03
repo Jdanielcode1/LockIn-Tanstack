@@ -161,4 +161,41 @@ export default defineSchema({
   })
     .index("by_session", ["sessionId"])
     .index("by_user", ["userId"]),
+
+  follows: defineTable({
+    followerId: v.id("users"), // User who is following
+    followingId: v.id("users"), // User being followed
+    createdAt: v.number(),
+  })
+    .index("by_follower", ["followerId"])
+    .index("by_following", ["followingId"])
+    .index("by_follower_and_following", ["followerId", "followingId"]),
+
+  clubs: defineTable({
+    name: v.string(),
+    description: v.string(),
+    creatorId: v.id("users"),
+    memberCount: v.number(),
+    type: v.union(
+      v.literal("coding"),
+      v.literal("study"),
+      v.literal("fitness"),
+      v.literal("general")
+    ),
+    isPublic: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_creator", ["creatorId"])
+    .index("by_type", ["type"])
+    .index("by_public", ["isPublic"]),
+
+  clubMembers: defineTable({
+    clubId: v.id("clubs"),
+    userId: v.id("users"),
+    role: v.union(v.literal("admin"), v.literal("member")),
+    joinedAt: v.number(),
+  })
+    .index("by_club", ["clubId"])
+    .index("by_user", ["userId"])
+    .index("by_club_and_user", ["clubId", "userId"]),
 });

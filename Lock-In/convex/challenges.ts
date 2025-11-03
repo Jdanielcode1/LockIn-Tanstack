@@ -179,3 +179,68 @@ export const isParticipating = query({
     return participant !== null;
   },
 });
+
+// Get active challenges for a user
+export const getUserChallenges = query({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("challenges"),
+      title: v.string(),
+      description: v.string(),
+      type: v.union(
+        v.literal("reading"),
+        v.literal("study"),
+        v.literal("workout"),
+        v.literal("custom")
+      ),
+      goal: v.optional(v.string()),
+      startDate: v.number(),
+      endDate: v.number(),
+      participantCount: v.number(),
+      isActive: v.boolean(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    // Get all challenge participations for this user
+    const participations = await ctx.db
+      .query("challengeParticipants")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    // Get full challenge details
+    const challenges = await Promise.all(
+      participations.map(async (p) => {
+        const challenge = await ctx.db.get(p.challengeId);
+        if (!challenge) return null;
+
+        // Get participant count
+        const participants = await ctx.db
+          .query("challengeParticipants")
+          .withIndex("by_challenge", (q) => q.eq("challengeId", p.challengeId))
+          .collect();
+
+        // Check if challenge is currently active
+        const now = Date.now();
+        const isActive = now >= challenge.startDate && now <= challenge.endDate;
+
+        return {
+          _id: challenge._id,
+          title: challenge.title,
+          description: challenge.description,
+          type: challenge.type,
+          goal: challenge.goal,
+          startDate: challenge.startDate,
+          endDate: challenge.endDate,
+          participantCount: participants.length,
+          isActive,
+        };
+      })
+    );
+
+    // Filter out nulls and return
+    return challenges.filter((c) => c !== null) as any;
+  },
+});

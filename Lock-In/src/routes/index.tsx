@@ -12,6 +12,7 @@ import { InlineComments } from '../components/InlineComments'
 import { QuickActionButton } from '../components/QuickActionButton'
 import { useUser } from '../components/UserProvider'
 import { Avatar } from '../components/Avatar'
+import { RightSidebar } from '../components/RightSidebar'
 
 export const Route = createFileRoute('/')({
   loader: async (opts) => {
@@ -224,8 +225,8 @@ function Feed() {
 
   return (
     <main className="min-h-screen bg-[#0d1117]">
-      <div className="container mx-auto px-4 py-6 max-w-[1280px]">
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+      <div className="container mx-auto px-4 py-6 max-w-[1600px]">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] xl:grid-cols-[320px_1fr_320px] gap-6">
           {/* Left Sidebar */}
           <aside className="hidden lg:block">
             <div className="sticky top-6 space-y-4">
@@ -609,6 +610,9 @@ function Feed() {
               </>
             )}
           </div>
+
+          {/* Right Sidebar */}
+          <RightSidebar />
         </div>
 
         {/* Create Project Modal */}
@@ -674,7 +678,7 @@ function ThumbnailDisplay({ timelapse }: { timelapse: any }) {
       params={{ timelapseId: timelapse._id }}
       className="block"
     >
-      <div className={`${isVertical ? 'aspect-[9/16] max-h-[600px] mx-auto' : getAspectRatioClass()} bg-[#0d1117] flex items-center justify-center relative overflow-hidden border-y border-[#30363d]`}>
+      <div className={`${isVertical ? 'w-full max-w-[450px] mx-auto aspect-[9/16] max-h-[750px]' : getAspectRatioClass()} bg-[#0d1117] flex items-center justify-center relative overflow-hidden border-y border-[#30363d]`}>
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
