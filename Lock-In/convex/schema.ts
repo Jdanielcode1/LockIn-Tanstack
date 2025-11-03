@@ -32,6 +32,7 @@ export default defineSchema({
   timelapses: defineTable({
     userId: v.id("users"),
     projectId: v.id("projects"),
+    challengeId: v.optional(v.id("challenges")), // Link timelapse to a challenge
     videoKey: v.string(), // Main video to display (processed or original)
     originalVideoKey: v.optional(v.string()), // Original video before processing
     processedVideoKey: v.optional(v.string()), // Processed timelapse video
@@ -62,7 +63,8 @@ export default defineSchema({
     .index("by_project", ["projectId"])
     .index("by_uploaded", ["uploadedAt"])
     .index("by_user", ["userId"])
-    .index("by_processing_status", ["processingStatus"]),
+    .index("by_processing_status", ["processingStatus"])
+    .index("by_challenge", ["challengeId"]),
 
   likes: defineTable({
     userId: v.id("users"),

@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TimelapseTimelapseIdRouteImport } from './routes/timelapse.$timelapseId'
 import { Route as SessionsSessionIdRouteImport } from './routes/sessions.$sessionId'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as ChallengesChallengeIdRouteImport } from './routes/challenges.$challengeId'
 
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
@@ -58,13 +59,19 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
 } as any)
+const ChallengesChallengeIdRoute = ChallengesChallengeIdRouteImport.update({
+  id: '/$challengeId',
+  path: '/$challengeId',
+  getParentRoute: () => ChallengesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
-  '/challenges': typeof ChallengesRoute
+  '/challenges': typeof ChallengesRouteWithChildren
   '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
+  '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -72,9 +79,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
-  '/challenges': typeof ChallengesRoute
+  '/challenges': typeof ChallengesRouteWithChildren
   '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
+  '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -83,9 +91,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
-  '/challenges': typeof ChallengesRoute
+  '/challenges': typeof ChallengesRouteWithChildren
   '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
+  '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/challenges'
     | '/leaderboard'
     | '/projects'
+    | '/challenges/$challengeId'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/timelapse/$timelapseId'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/challenges'
     | '/leaderboard'
     | '/projects'
+    | '/challenges/$challengeId'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/timelapse/$timelapseId'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/challenges'
     | '/leaderboard'
     | '/projects'
+    | '/challenges/$challengeId'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/timelapse/$timelapseId'
@@ -126,7 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnotherPageRoute: typeof AnotherPageRoute
-  ChallengesRoute: typeof ChallengesRoute
+  ChallengesRoute: typeof ChallengesRouteWithChildren
   LeaderboardRoute: typeof LeaderboardRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   SessionsSessionIdRoute: typeof SessionsSessionIdRoute
@@ -191,8 +203,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
     }
+    '/challenges/$challengeId': {
+      id: '/challenges/$challengeId'
+      path: '/$challengeId'
+      fullPath: '/challenges/$challengeId'
+      preLoaderRoute: typeof ChallengesChallengeIdRouteImport
+      parentRoute: typeof ChallengesRoute
+    }
   }
 }
+
+interface ChallengesRouteChildren {
+  ChallengesChallengeIdRoute: typeof ChallengesChallengeIdRoute
+}
+
+const ChallengesRouteChildren: ChallengesRouteChildren = {
+  ChallengesChallengeIdRoute: ChallengesChallengeIdRoute,
+}
+
+const ChallengesRouteWithChildren = ChallengesRoute._addFileChildren(
+  ChallengesRouteChildren,
+)
 
 interface ProjectsRouteChildren {
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
@@ -209,7 +240,7 @@ const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnotherPageRoute: AnotherPageRoute,
-  ChallengesRoute: ChallengesRoute,
+  ChallengesRoute: ChallengesRouteWithChildren,
   LeaderboardRoute: LeaderboardRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   SessionsSessionIdRoute: SessionsSessionIdRoute,

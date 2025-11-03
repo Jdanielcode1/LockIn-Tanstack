@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useMatches } from '@tanstack/react-router'
 import { useSuspenseQuery, useQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useMutation } from 'convex/react'
@@ -9,10 +9,21 @@ import { useUser } from '../components/UserProvider'
 import { CreateChallengeModal } from '../components/CreateChallengeModal'
 
 export const Route = createFileRoute('/challenges')({
-  component: Challenges,
+  component: ChallengesLayout,
 })
 
-function Challenges() {
+function ChallengesLayout() {
+  const matches = useMatches()
+  const isChildRoute = matches.some(match => match.routeId === '/challenges/$challengeId')
+
+  if (isChildRoute) {
+    return <Outlet />
+  }
+
+  return <ChallengesList />
+}
+
+function ChallengesList() {
   const { user } = useUser()
   const [showCreateModal, setShowCreateModal] = useState(false)
 
@@ -238,78 +249,90 @@ function ChallengeCard({
   })
 
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden hover:border-[#8b949e] transition">
-      {/* Header with gradient */}
-      <div className={`h-24 bg-gradient-to-br ${getTypeColor(challenge.type)} flex items-center justify-center relative`}>
-        <div className="text-5xl">{getTypeIcon(challenge.type)}</div>
-        {isCompleted && (
-          <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-            Completed
+    <div className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden hover:border-[#8b949e] transition group">
+      <Link
+        to="/challenges/$challengeId"
+        params={{ challengeId: challenge._id }}
+        className="block"
+      >
+        {/* Header with gradient */}
+        <div className={`h-24 bg-gradient-to-br ${getTypeColor(challenge.type)} flex items-center justify-center relative group-hover:scale-105 transition`}>
+          <div className="text-5xl">{getTypeIcon(challenge.type)}</div>
+          {isCompleted && (
+            <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+              Completed
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="p-4">
+          <h3 className="text-lg font-bold text-[#c9d1d9] mb-2 line-clamp-2 group-hover:text-[#58a6ff] transition">
+            {challenge.title}
+          </h3>
+          <p className="text-sm text-[#8b949e] mb-4 line-clamp-2">
+            {challenge.description}
+          </p>
+
+          {challenge.goal && (
+            <div className="mb-4 p-2 bg-[#0d1117] rounded border border-[#30363d]">
+              <div className="text-xs text-[#8b949e] mb-1">Goal</div>
+              <div className="text-sm text-[#c9d1d9] font-semibold">
+                {challenge.goal}
+              </div>
+            </div>
+          )}
+
+          {/* Dates */}
+          <div className="flex items-center gap-2 mb-4 text-xs text-[#8b949e]">
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM1 3.857C1 3.384 1.448 3 2 3h12c.552 0 1 .384 1 .857v10.286c0 .473-.448.857-1 .857H2c-.552 0-1-.384-1-.857V3.857z"/>
+              <path d="M6.5 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+            </svg>
+            <span>
+              {new Date(challenge.startDate).toLocaleDateString()} -{' '}
+              {new Date(challenge.endDate).toLocaleDateString()}
+            </span>
           </div>
-        )}
-      </div>
 
-      {/* Content */}
-      <div className="p-4">
-        <h3 className="text-lg font-bold text-[#c9d1d9] mb-2 line-clamp-2">
-          {challenge.title}
-        </h3>
-        <p className="text-sm text-[#8b949e] mb-4 line-clamp-2">
-          {challenge.description}
-        </p>
-
-        {challenge.goal && (
-          <div className="mb-4 p-2 bg-[#0d1117] rounded border border-[#30363d]">
-            <div className="text-xs text-[#8b949e] mb-1">Goal</div>
-            <div className="text-sm text-[#c9d1d9] font-semibold">
-              {challenge.goal}
+          {/* Participants */}
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-1.5 text-[#8b949e]">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7Zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5.784 6A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216ZM4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
+              </svg>
+              <span>{challenge.participantCount} joined</span>
             </div>
           </div>
-        )}
-
-        {/* Dates */}
-        <div className="flex items-center gap-2 mb-4 text-xs text-[#8b949e]">
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM1 3.857C1 3.384 1.448 3 2 3h12c.552 0 1 .384 1 .857v10.286c0 .473-.448.857-1 .857H2c-.552 0-1-.384-1-.857V3.857z"/>
-            <path d="M6.5 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
-          </svg>
-          <span>
-            {new Date(challenge.startDate).toLocaleDateString()} -{' '}
-            {new Date(challenge.endDate).toLocaleDateString()}
-          </span>
         </div>
+      </Link>
 
-        {/* Participants */}
-        <div className="flex items-center justify-between mb-4 text-sm">
-          <div className="flex items-center gap-1.5 text-[#8b949e]">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7Zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5.784 6A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216ZM4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
-            </svg>
-            <span>{challenge.participantCount} joined</span>
-          </div>
+      {/* Action Button - Outside Link to prevent nested buttons */}
+      {!isCompleted && (
+        <div className="p-4 pt-0">
+          {isParticipating ? (
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                onLeave(challenge._id)
+              }}
+              className="w-full bg-[#21262d] border border-[#30363d] text-[#c9d1d9] py-2 rounded-md hover:bg-[#30363d] transition text-sm font-medium"
+            >
+              Leave Challenge
+            </button>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                onJoin(challenge._id)
+              }}
+              className="w-full bg-[#238636] hover:bg-[#2ea043] text-white py-2 rounded-md transition text-sm font-medium"
+            >
+              Join Challenge
+            </button>
+          )}
         </div>
-
-        {/* Action Button */}
-        {!isCompleted && (
-          <div>
-            {isParticipating ? (
-              <button
-                onClick={() => onLeave(challenge._id)}
-                className="w-full bg-[#21262d] border border-[#30363d] text-[#c9d1d9] py-2 rounded-md hover:bg-[#30363d] transition text-sm font-medium"
-              >
-                Leave Challenge
-              </button>
-            ) : (
-              <button
-                onClick={() => onJoin(challenge._id)}
-                className="w-full bg-[#238636] hover:bg-[#2ea043] text-white py-2 rounded-md transition text-sm font-medium"
-              >
-                Join Challenge
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }
