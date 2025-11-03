@@ -20,6 +20,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const [openaiConnection, setOpenaiConnection] = useState<RTCPeerConnection | null>(null)
   const [aiAgentConnected, setAiAgentConnected] = useState(false)
   const openaiInitializedRef = useRef(false)
+  const [copied, setCopied] = useState(false)
 
   // Fetch session details
   const { data: session } = useSuspenseQuery(
@@ -263,6 +264,20 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     }
   }
 
+  const handleCopyInvite = async () => {
+    const inviteUrl = `${window.location.origin}/sessions/${sessionId}`
+
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy invite link:', error)
+      // Fallback: show the URL
+      alert(`Share this link:\n${inviteUrl}`)
+    }
+  }
+
   if (!session) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -433,6 +448,34 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Invite Link */}
+            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
+              <h3 className="text-sm font-semibold text-[#e6edf3] mb-3">Invite Others</h3>
+              <button
+                onClick={handleCopyInvite}
+                className="w-full px-4 py-2 bg-[#238636] text-white rounded-md hover:bg-[#2ea043] transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {copied ? (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy Invite Link
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-[#8b949e] mt-2 text-center">
+                Share this link with others to join the session
+              </p>
+            </div>
+
             {/* Participants */}
             <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
               <h3 className="text-sm font-semibold text-[#e6edf3] mb-3">
