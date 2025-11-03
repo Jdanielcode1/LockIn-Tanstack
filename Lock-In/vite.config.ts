@@ -9,7 +9,10 @@ export default defineConfig({
     host: '0.0.0.0', // Listen on all network interfaces
     port: 3001,
     watch: {
-      ignored: ['**/cloudflare-realtime-agent/**'],
+      ignored: [
+        '**/cloudflare-realtime-agent/**',
+        '**/routeTree.gen.ts', // Ignore route tree generation to prevent infinite reloads
+      ],
     },
   },
   plugins: [

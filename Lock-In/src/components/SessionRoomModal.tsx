@@ -37,23 +37,73 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   )
 
   const initializeMeetingAction = useAction(api.realtimeActions.initializeMeeting)
+  const addParticipantAction = useAction(api.realtimeActions.addParticipant)
   const generateOpenAITokenAction = useAction(api.openaiRealtime.generateEphemeralToken)
   const leaveMutation = useMutation(api.lockInSessions.leave)
   const endMutation = useMutation(api.lockInSessions.end)
 
-  // Initialize RealtimeKit when session becomes active and has auth token
+  // For non-creators: join session and get their own auth token
+  const [participantAuthToken, setParticipantAuthToken] = useState<string | null>(null)
+  const [isJoining, setIsJoining] = useState(false)
+  const hasAttemptedJoin = useRef(false)
+
   useEffect(() => {
-    if (session?.status === 'active' && session.realtimeKitAuthToken && !meeting) {
-      console.log('Initializing RealtimeKit meeting with token')
+    const isCreator = user?.userId === session?.creatorId
+    const isActiveSession = session?.status === 'active'
+    const hasMeetingId = !!session?.realtimeKitMeetingId
+
+    // Auto-join for non-creators when session is active
+    if (!isCreator && isActiveSession && hasMeetingId && user && !participantAuthToken && !hasAttemptedJoin.current) {
+      hasAttemptedJoin.current = true
+      setIsJoining(true)
+
+      const autoJoin = async () => {
+        try {
+          console.log('Auto-joining active session as invited participant')
+          const result = await addParticipantAction({
+            sessionId,
+            userId: user.userId,
+          })
+
+          if (result.success && result.authToken) {
+            setParticipantAuthToken(result.authToken)
+            console.log('Successfully joined session with own auth token')
+          } else {
+            console.error('Failed to join session:', result.error)
+            alert(`Failed to join session: ${result.error}`)
+          }
+        } catch (error) {
+          console.error('Error auto-joining session:', error)
+          alert('Failed to join session. Please try again.')
+        } finally {
+          setIsJoining(false)
+        }
+      }
+
+      autoJoin()
+    }
+  }, [session?.status, session?.creatorId, session?.realtimeKitMeetingId, user, sessionId, participantAuthToken, addParticipantAction])
+
+  // Initialize RealtimeKit meeting
+  // - Creators use the auth token from session (created when they start the meeting)
+  // - Participants use their own auth token (obtained when they join)
+  useEffect(() => {
+    if (session?.status !== 'active' || meeting) return
+
+    const isCreator = user?.userId === session?.creatorId
+    const authToken = isCreator ? session.realtimeKitAuthToken : participantAuthToken
+
+    if (authToken) {
+      console.log(`Initializing RealtimeKit meeting as ${isCreator ? 'creator' : 'participant'}`)
       initMeeting({
-        authToken: session.realtimeKitAuthToken,
+        authToken: authToken,
         defaults: {
           audio: true,
           video: true,
         },
       })
     }
-  }, [session?.status, session?.realtimeKitAuthToken, meeting, initMeeting])
+  }, [session?.status, session?.realtimeKitAuthToken, session?.creatorId, user?.userId, participantAuthToken, meeting, initMeeting])
 
   // Initialize OpenAI Realtime API when AI agent is enabled and session is active
   useEffect(() => {
@@ -402,6 +452,13 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
                       >
                         {isStarting ? 'Starting...' : 'Start Session'}
                       </button>
+                    </>
+                  ) : isJoining ? (
+                    <>
+                      <p className="text-sm text-[#8b949e] mb-4">
+                        Joining session...
+                      </p>
+                      <div className="animate-spin text-4xl">⏳</div>
                     </>
                   ) : (
                     <p className="text-sm text-[#8b949e] mb-4">

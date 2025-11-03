@@ -168,3 +168,113 @@ export const initializeMeeting = action({
     }
   },
 });
+
+// Add a participant to an existing Cloudflare Realtime meeting
+// Each participant gets their own auth token for joining
+type AddParticipantResult = {
+  success: boolean;
+  authToken?: string;
+  error?: string;
+};
+
+export const addParticipant = action({
+  args: {
+    sessionId: v.id("lockInSessions"),
+    userId: v.id("users"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    authToken: v.optional(v.string()),
+    error: v.optional(v.string()),
+  }),
+  handler: async (ctx, args): Promise<AddParticipantResult> => {
+    const realtimeAppId = process.env.REALTIMEKIT_APP_ID;
+    const realtimeApiToken = process.env.REALTIMEKIT_API_TOKEN;
+
+    if (!realtimeAppId || !realtimeApiToken) {
+      return {
+        success: false,
+        error: "Cloudflare Realtime credentials not configured",
+      };
+    }
+
+    try {
+      // Fetch session details
+      const session: any = await ctx.runQuery(api.lockInSessions.get, {
+        sessionId: args.sessionId,
+      });
+
+      if (!session) {
+        return { success: false, error: "Session not found" };
+      }
+
+      if (!session.realtimeKitMeetingId) {
+        return { success: false, error: "Meeting not initialized yet" };
+      }
+
+      // Get user info
+      const user: any = await ctx.runQuery(api.users.getUser, {
+        userId: args.userId,
+      });
+
+      if (!user) {
+        return { success: false, error: "User not found" };
+      }
+
+      // Add participant to existing meeting
+      const basicAuthCredentials = btoa(`${realtimeAppId}:${realtimeApiToken}`);
+      const addParticipantUrl = `https://api.realtime.cloudflare.com/v2/meetings/${session.realtimeKitMeetingId}/participants`;
+
+      console.log(`Adding participant ${user.username} to meeting ${session.realtimeKitMeetingId}`);
+
+      const addParticipantResponse: any = await fetch(addParticipantUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${basicAuthCredentials}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: user.username || "Participant",
+          preset_name: "group_call_host", // Use same preset as host
+          client_specific_id: args.userId,
+        }),
+      });
+
+      if (!addParticipantResponse.ok) {
+        const errorText = await addParticipantResponse.text();
+        console.error("Failed to add participant:", errorText);
+        return {
+          success: false,
+          error: `Failed to add participant: ${addParticipantResponse.status}`,
+        };
+      }
+
+      const participantData = (await addParticipantResponse.json()) as {
+        success: boolean;
+        data: {
+          id: string;
+          token: string;
+        };
+      };
+
+      console.log(`Participant ${user.username} added successfully`);
+
+      // Update database to mark user as participant
+      await ctx.runMutation(api.lockInSessions.join, {
+        sessionId: args.sessionId,
+        userId: args.userId,
+      });
+
+      return {
+        success: true,
+        authToken: participantData.data.token,
+      };
+    } catch (error: any) {
+      console.error("Error adding participant:", error);
+      return {
+        success: false,
+        error: error.message || "Unknown error",
+      };
+    }
+  },
+});
