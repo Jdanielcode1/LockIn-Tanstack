@@ -11,12 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
+import { Route as ClubsRouteImport } from './routes/clubs'
 import { Route as ChallengesRouteImport } from './routes/challenges'
 import { Route as AnotherPageRouteImport } from './routes/anotherPage'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TimelapseTimelapseIdRouteImport } from './routes/timelapse.$timelapseId'
 import { Route as SessionsSessionIdRouteImport } from './routes/sessions.$sessionId'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
+import { Route as ClubsClubIdRouteImport } from './routes/clubs.$clubId'
 import { Route as ChallengesChallengeIdRouteImport } from './routes/challenges.$challengeId'
 
 const ProjectsRoute = ProjectsRouteImport.update({
@@ -27,6 +29,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
 const LeaderboardRoute = LeaderboardRouteImport.update({
   id: '/leaderboard',
   path: '/leaderboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClubsRoute = ClubsRouteImport.update({
+  id: '/clubs',
+  path: '/clubs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChallengesRoute = ChallengesRouteImport.update({
@@ -59,6 +66,11 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
 } as any)
+const ClubsClubIdRoute = ClubsClubIdRouteImport.update({
+  id: '/$clubId',
+  path: '/$clubId',
+  getParentRoute: () => ClubsRoute,
+} as any)
 const ChallengesChallengeIdRoute = ChallengesChallengeIdRouteImport.update({
   id: '/$challengeId',
   path: '/$challengeId',
@@ -69,9 +81,11 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
   '/challenges': typeof ChallengesRouteWithChildren
+  '/clubs': typeof ClubsRouteWithChildren
   '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
+  '/clubs/$clubId': typeof ClubsClubIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -80,9 +94,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
   '/challenges': typeof ChallengesRouteWithChildren
+  '/clubs': typeof ClubsRouteWithChildren
   '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
+  '/clubs/$clubId': typeof ClubsClubIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -92,9 +108,11 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/anotherPage': typeof AnotherPageRoute
   '/challenges': typeof ChallengesRouteWithChildren
+  '/clubs': typeof ClubsRouteWithChildren
   '/leaderboard': typeof LeaderboardRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
+  '/clubs/$clubId': typeof ClubsClubIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
@@ -105,9 +123,11 @@ export interface FileRouteTypes {
     | '/'
     | '/anotherPage'
     | '/challenges'
+    | '/clubs'
     | '/leaderboard'
     | '/projects'
     | '/challenges/$challengeId'
+    | '/clubs/$clubId'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/timelapse/$timelapseId'
@@ -116,9 +136,11 @@ export interface FileRouteTypes {
     | '/'
     | '/anotherPage'
     | '/challenges'
+    | '/clubs'
     | '/leaderboard'
     | '/projects'
     | '/challenges/$challengeId'
+    | '/clubs/$clubId'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/timelapse/$timelapseId'
@@ -127,9 +149,11 @@ export interface FileRouteTypes {
     | '/'
     | '/anotherPage'
     | '/challenges'
+    | '/clubs'
     | '/leaderboard'
     | '/projects'
     | '/challenges/$challengeId'
+    | '/clubs/$clubId'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/timelapse/$timelapseId'
@@ -139,6 +163,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnotherPageRoute: typeof AnotherPageRoute
   ChallengesRoute: typeof ChallengesRouteWithChildren
+  ClubsRoute: typeof ClubsRouteWithChildren
   LeaderboardRoute: typeof LeaderboardRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   SessionsSessionIdRoute: typeof SessionsSessionIdRoute
@@ -159,6 +184,13 @@ declare module '@tanstack/react-router' {
       path: '/leaderboard'
       fullPath: '/leaderboard'
       preLoaderRoute: typeof LeaderboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clubs': {
+      id: '/clubs'
+      path: '/clubs'
+      fullPath: '/clubs'
+      preLoaderRoute: typeof ClubsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/challenges': {
@@ -203,6 +235,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
     }
+    '/clubs/$clubId': {
+      id: '/clubs/$clubId'
+      path: '/$clubId'
+      fullPath: '/clubs/$clubId'
+      preLoaderRoute: typeof ClubsClubIdRouteImport
+      parentRoute: typeof ClubsRoute
+    }
     '/challenges/$challengeId': {
       id: '/challenges/$challengeId'
       path: '/$challengeId'
@@ -225,6 +264,16 @@ const ChallengesRouteWithChildren = ChallengesRoute._addFileChildren(
   ChallengesRouteChildren,
 )
 
+interface ClubsRouteChildren {
+  ClubsClubIdRoute: typeof ClubsClubIdRoute
+}
+
+const ClubsRouteChildren: ClubsRouteChildren = {
+  ClubsClubIdRoute: ClubsClubIdRoute,
+}
+
+const ClubsRouteWithChildren = ClubsRoute._addFileChildren(ClubsRouteChildren)
+
 interface ProjectsRouteChildren {
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
 }
@@ -241,6 +290,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnotherPageRoute: AnotherPageRoute,
   ChallengesRoute: ChallengesRouteWithChildren,
+  ClubsRoute: ClubsRouteWithChildren,
   LeaderboardRoute: LeaderboardRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   SessionsSessionIdRoute: SessionsSessionIdRoute,

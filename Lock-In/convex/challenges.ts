@@ -5,6 +5,7 @@ import { paginationOptsValidator } from "convex/server";
 export const create = mutation({
   args: {
     creatorId: v.id("users"),
+    clubId: v.optional(v.id("clubs")), // Optional: link challenge to a club
     title: v.string(),
     description: v.string(),
     type: v.union(
@@ -21,6 +22,20 @@ export const create = mutation({
     challengeId: v.id("challenges"),
   }),
   handler: async (ctx, args) => {
+    // If clubId is provided, verify creator is a member of the club
+    if (args.clubId) {
+      const membership = await ctx.db
+        .query("clubMembers")
+        .withIndex("by_club_and_user", (q) =>
+          q.eq("clubId", args.clubId!).eq("userId", args.creatorId)
+        )
+        .first();
+
+      if (!membership) {
+        throw new Error("Only club members can create club challenges");
+      }
+    }
+
     const challengeId = await ctx.db.insert("challenges", {
       ...args,
       createdAt: Date.now(),
@@ -97,6 +112,19 @@ export const get = query({
 
     const creator = await ctx.db.get(challenge.creatorId);
 
+    // Get club info if challenge is linked to a club
+    let club = null;
+    if (challenge.clubId) {
+      const clubData = await ctx.db.get(challenge.clubId);
+      if (clubData) {
+        club = {
+          _id: clubData._id,
+          name: clubData.name,
+          type: clubData.type,
+        };
+      }
+    }
+
     return {
       ...challenge,
       participantCount: participants.length,
@@ -107,6 +135,7 @@ export const get = query({
             avatarKey: creator.avatarKey,
           }
         : null,
+      club,
     };
   },
 });

@@ -81,16 +81,29 @@ function ChallengesList() {
     }
   }
 
-  const getTypeColor = (type: string) => {
+  const getTypeBorderColor = (type: string) => {
     switch (type) {
       case 'reading':
-        return 'from-blue-500 to-indigo-600'
+        return 'border-l-[#1f6feb]'
       case 'study':
-        return 'from-purple-500 to-pink-600'
+        return 'border-l-[#3fb950]'
       case 'workout':
-        return 'from-orange-500 to-red-600'
+        return 'border-l-[#f0883e]'
       default:
-        return 'from-green-500 to-teal-600'
+        return 'border-l-[#8b949e]'
+    }
+  }
+
+  const getTypeBgColor = (type: string) => {
+    switch (type) {
+      case 'reading':
+        return 'bg-[#1f6feb]/5'
+      case 'study':
+        return 'bg-[#3fb950]/5'
+      case 'workout':
+        return 'bg-[#f0883e]/5'
+      default:
+        return 'bg-[#8b949e]/5'
     }
   }
 
@@ -143,7 +156,8 @@ function ChallengesList() {
                   onJoin={handleJoinChallenge}
                   onLeave={handleLeaveChallenge}
                   getTypeIcon={getTypeIcon}
-                  getTypeColor={getTypeColor}
+                  getTypeBorderColor={getTypeBorderColor}
+                  getTypeBgColor={getTypeBgColor}
                 />
               ))}
             </div>
@@ -165,7 +179,8 @@ function ChallengesList() {
                   onJoin={handleJoinChallenge}
                   onLeave={handleLeaveChallenge}
                   getTypeIcon={getTypeIcon}
-                  getTypeColor={getTypeColor}
+                  getTypeBorderColor={getTypeBorderColor}
+                  getTypeBgColor={getTypeBgColor}
                 />
               ))}
             </div>
@@ -229,7 +244,8 @@ function ChallengeCard({
   onJoin,
   onLeave,
   getTypeIcon,
-  getTypeColor,
+  getTypeBorderColor,
+  getTypeBgColor,
   isCompleted = false,
 }: {
   challenge: any
@@ -237,7 +253,8 @@ function ChallengeCard({
   onJoin: (id: Id<'challenges'>) => void
   onLeave: (id: Id<'challenges'>) => void
   getTypeIcon: (type: string) => string
-  getTypeColor: (type: string) => string
+  getTypeBorderColor: (type: string) => string
+  getTypeBgColor: (type: string) => string
   isCompleted?: boolean
 }) {
   const { data: isParticipating } = useQuery({
@@ -255,11 +272,11 @@ function ChallengeCard({
         params={{ challengeId: challenge._id }}
         className="block"
       >
-        {/* Header with gradient */}
-        <div className={`h-24 bg-gradient-to-br ${getTypeColor(challenge.type)} flex items-center justify-center relative group-hover:scale-105 transition`}>
+        {/* Header with flat design and colored border */}
+        <div className={`h-24 ${getTypeBgColor(challenge.type)} flex items-center justify-center relative border-l-4 ${getTypeBorderColor(challenge.type)} transition`}>
           <div className="text-5xl">{getTypeIcon(challenge.type)}</div>
           {isCompleted && (
-            <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+            <div className="absolute top-2 right-2 bg-[#0d1117] text-[#8b949e] text-xs px-2 py-1 rounded border border-[#30363d]">
               Completed
             </div>
           )}

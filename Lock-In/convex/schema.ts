@@ -85,6 +85,7 @@ export default defineSchema({
 
   challenges: defineTable({
     creatorId: v.id("users"),
+    clubId: v.optional(v.id("clubs")), // Link challenge to a club (club-only challenge)
     title: v.string(),
     description: v.string(),
     type: v.union(
@@ -99,7 +100,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_creator", ["creatorId"])
-    .index("by_dates", ["startDate", "endDate"]),
+    .index("by_dates", ["startDate", "endDate"])
+    .index("by_club", ["clubId"]),
 
   challengeParticipants: defineTable({
     challengeId: v.id("challenges"),

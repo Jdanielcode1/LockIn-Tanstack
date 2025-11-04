@@ -91,16 +91,42 @@ function ChallengeDetail() {
     }
   }
 
-  const getTypeColor = (type: string) => {
+  const getTypeBorderColor = (type: string) => {
     switch (type) {
       case 'reading':
-        return 'from-blue-500 to-indigo-600'
+        return 'border-l-[#1f6feb]'
       case 'study':
-        return 'from-purple-500 to-pink-600'
+        return 'border-l-[#3fb950]'
       case 'workout':
-        return 'from-orange-500 to-red-600'
+        return 'border-l-[#f0883e]'
       default:
-        return 'from-green-500 to-teal-600'
+        return 'border-l-[#8b949e]'
+    }
+  }
+
+  const getTypeBgColor = (type: string) => {
+    switch (type) {
+      case 'reading':
+        return 'bg-[#1f6feb]/5'
+      case 'study':
+        return 'bg-[#3fb950]/5'
+      case 'workout':
+        return 'bg-[#f0883e]/5'
+      default:
+        return 'bg-[#8b949e]/5'
+    }
+  }
+
+  const getTypeTextColor = (type: string) => {
+    switch (type) {
+      case 'reading':
+        return 'text-[#1f6feb]'
+      case 'study':
+        return 'text-[#3fb950]'
+      case 'workout':
+        return 'text-[#f0883e]'
+      default:
+        return 'text-[#8b949e]'
     }
   }
 
@@ -132,7 +158,7 @@ function ChallengeDetail() {
         {/* Challenge Header */}
         <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden mb-6">
           <div
-            className={`h-32 bg-gradient-to-br ${getTypeColor(challenge.type)} flex items-center justify-center`}
+            className={`h-32 ${getTypeBgColor(challenge.type)} border-l-4 ${getTypeBorderColor(challenge.type)} flex items-center justify-center`}
           >
             <div className="text-7xl">{getTypeIcon(challenge.type)}</div>
           </div>
@@ -343,6 +369,37 @@ function ChallengeDetail() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Club Info */}
+            {challenge.club && (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-[#8b949e] mb-3">
+                  Club Challenge
+                </h3>
+                <Link
+                  to="/clubs/$clubId"
+                  params={{ clubId: challenge.club._id }}
+                  className="flex items-center gap-3 p-3 rounded-md bg-[#0d1117] border border-[#30363d] hover:border-[#58a6ff] transition group"
+                >
+                  <div className="text-3xl">
+                    {challenge.club.type === 'coding' ? '💻' :
+                     challenge.club.type === 'study' ? '📚' :
+                     challenge.club.type === 'fitness' ? '💪' : '👥'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-[#c9d1d9] group-hover:text-[#58a6ff] transition truncate">
+                      {challenge.club.name}
+                    </div>
+                    <div className="text-xs text-[#8b949e] capitalize">
+                      {challenge.club.type} club
+                    </div>
+                  </div>
+                  <svg className="w-4 h-4 text-[#8b949e] group-hover:text-[#58a6ff] transition" fill="currentColor" viewBox="0 0 16 16">
+                    <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                  </svg>
+                </Link>
+              </div>
+            )}
+
             {/* Creator Info */}
             {challenge.creator && (
               <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4">
@@ -406,10 +463,10 @@ function ChallengeDetail() {
                 Challenge Type
               </h3>
               <div
-                className={`flex items-center justify-center gap-2 p-3 rounded-md bg-gradient-to-br ${getTypeColor(challenge.type)}`}
+                className={`flex items-center justify-center gap-2 p-3 rounded-md ${getTypeBgColor(challenge.type)} border-l-4 ${getTypeBorderColor(challenge.type)}`}
               >
                 <span className="text-3xl">{getTypeIcon(challenge.type)}</span>
-                <span className="text-lg font-bold text-white capitalize">
+                <span className={`text-lg font-bold capitalize ${getTypeTextColor(challenge.type)}`}>
                   {challenge.type}
                 </span>
               </div>

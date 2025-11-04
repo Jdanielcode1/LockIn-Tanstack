@@ -2,12 +2,15 @@ import { useState } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import { useUser } from './UserProvider'
+import type { Id } from '../../convex/_generated/dataModel'
 
 interface CreateChallengeModalProps {
   onClose: () => void
+  clubId?: Id<'clubs'> // Optional: if provided, creates a club-specific challenge
+  clubName?: string // Optional: club name to display in modal
 }
 
-export function CreateChallengeModal({ onClose }: CreateChallengeModalProps) {
+export function CreateChallengeModal({ onClose, clubId, clubName }: CreateChallengeModalProps) {
   const { user } = useUser()
   const createChallenge = useMutation(api.challenges.create)
 
@@ -44,6 +47,7 @@ export function CreateChallengeModal({ onClose }: CreateChallengeModalProps) {
     try {
       await createChallenge({
         creatorId: user.userId,
+        clubId: clubId || undefined, // Include clubId if provided
         title: title.trim(),
         description: description.trim(),
         type,
@@ -52,11 +56,12 @@ export function CreateChallengeModal({ onClose }: CreateChallengeModalProps) {
         endDate: end,
       })
 
-      alert('Challenge created successfully!')
+      alert(`Challenge created successfully${clubId ? ' for ' + clubName : ''}!`)
       onClose()
     } catch (error) {
       console.error('Error creating challenge:', error)
-      alert('Failed to create challenge. Please try again.')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create challenge'
+      alert(errorMessage)
     } finally {
       setSubmitting(false)
     }
@@ -67,7 +72,16 @@ export function CreateChallengeModal({ onClose }: CreateChallengeModalProps) {
       <div className="bg-[#161b22] rounded-md max-w-2xl w-full border border-[#30363d]">
         {/* Header */}
         <div className="border-b border-[#30363d] px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-[#c9d1d9]">Create Challenge</h2>
+          <div>
+            <h2 className="text-xl font-semibold text-[#c9d1d9]">
+              {clubId ? `Create Challenge for ${clubName}` : 'Create Challenge'}
+            </h2>
+            {clubId && (
+              <p className="text-sm text-[#8b949e] mt-1">
+                This challenge will be visible to all club members
+              </p>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="text-[#8b949e] hover:text-[#c9d1d9] transition"
