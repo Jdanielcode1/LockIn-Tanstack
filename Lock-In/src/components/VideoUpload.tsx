@@ -159,7 +159,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
           const processUrl = `${workerUrl}/process`
           const payload = {
             videoKey,
-            speedMultiplier,
+            samplingFps: speedMultiplier, // Use samplingFps parameter for true timelapse
             timelapseId,
           }
 

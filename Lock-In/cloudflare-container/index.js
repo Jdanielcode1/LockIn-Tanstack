@@ -60,7 +60,9 @@ async function downloadFromUrl(url) {
 // Upload file to R2
 async function uploadToR2(filePath, prefix = 'videos') {
   const fileContent = fs.readFileSync(filePath);
-  const key = `${prefix}/${crypto.randomUUID()}`;
+  const key = `${prefix}/${crypto.randomUUID()}.mp4`;
+
+  console.log(`Uploading to R2: ${key} (${fileContent.length} bytes)`);
 
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
@@ -70,16 +72,18 @@ async function uploadToR2(filePath, prefix = 'videos') {
   });
 
   await s3Client.send(command);
+  console.log(`Successfully uploaded to R2: ${key}`);
   return key;
 }
 
-// Process video with FFmpeg
-async function processVideo(inputPath, outputPath, speedMultiplier, timelapseId = null) {
+// Process video with FFmpeg - True timelapse via frame sampling
+async function processVideo(inputPath, outputPath, samplingFps, timelapseId = null) {
   return new Promise((resolve, reject) => {
-    // Use setpts to change timestamps and fps filter to output at proper frame rate
+    // Use fps filter for true timelapse effect (frame sampling)
+    // Example: 60fps video with samplingFps=1 → captures 1 frame per second (60x compression)
     const ffmpeg = spawn('ffmpeg', [
       '-i', inputPath,
-      '-filter:v', `setpts=PTS/${speedMultiplier},fps=30`,
+      '-filter:v', `fps=${samplingFps}`, // Frame sampling for true timelapse
       '-an', // Remove audio
       '-y', // Overwrite output file
       '-c:v', 'libx264', // Re-encode with h264
@@ -251,7 +255,7 @@ async function updateConvexStatus(timelapseId, status, processedVideoKey = null,
 
 // Main processing endpoint
 app.post('/process', async (req, res) => {
-  const { videoUrl, speedMultiplier = 8, timelapseId } = req.body;
+  const { videoUrl, samplingFps = 1, timelapseId } = req.body;
 
   if (!videoUrl) {
     return res.status(400).json({ error: 'videoUrl is required' });
@@ -261,7 +265,7 @@ app.post('/process', async (req, res) => {
     return res.status(400).json({ error: 'timelapseId is required' });
   }
 
-  console.log(`Processing video from URL with speed: ${speedMultiplier}x for timelapse: ${timelapseId}`);
+  console.log(`Processing video from URL with sampling rate: ${samplingFps}fps for timelapse: ${timelapseId}`);
 
   let inputPath, outputPath;
 
@@ -270,26 +274,26 @@ app.post('/process', async (req, res) => {
     console.log('Downloading video from URL...');
     inputPath = await downloadFromUrl(videoUrl);
 
-    // Process video
+    // Process video with frame sampling
     outputPath = path.join(TMP_DIR, `output-${Date.now()}.mp4`);
-    console.log('Processing video with FFmpeg...');
-    await processVideo(inputPath, outputPath, speedMultiplier, timelapseId);
+    console.log('Processing video with FFmpeg (frame sampling)...');
+    await processVideo(inputPath, outputPath, samplingFps, timelapseId);
 
-    // Read processed video and return as base64
+    // Read processed video as base64 for worker upload
     console.log('Reading processed video...');
-    const processedVideoBuffer = fs.readFileSync(outputPath);
-    const processedVideoBase64 = processedVideoBuffer.toString('base64');
+    const videoBuffer = fs.readFileSync(outputPath);
+    const videoBase64 = videoBuffer.toString('base64');
 
     // Cleanup temp files
     fs.unlinkSync(inputPath);
     fs.unlinkSync(outputPath);
 
-    console.log('Sending processed video back to worker');
+    console.log('Successfully processed timelapse, returning to worker for R2 upload');
 
     res.json({
       success: true,
-      videoBase64: processedVideoBase64,
-      speedMultiplier,
+      videoBase64,
+      samplingFps,
     });
   } catch (error) {
     console.error('Processing error:', error);
