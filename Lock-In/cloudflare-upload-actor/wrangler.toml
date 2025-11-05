@@ -1,0 +1,19 @@
+name = "lock-in-upload-actor"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+[observability]
+enabled = true
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "lock-in-bucket-2"
+
+[durable_objects]
+bindings = [
+  { name = "Uploader", class_name = "Uploader" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Uploader"]

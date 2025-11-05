@@ -4,12 +4,16 @@ import { useMutation } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import { useUser } from './UserProvider'
+import { uploadLargeFile } from '../utils/multipartUpload'
 
 interface VideoUploadProps {
   projectId: Id<'projects'>
   onComplete: () => void
   onCancel: () => void
 }
+
+const LARGE_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024 // 5GB
 
 export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProps) {
   const { user } = useUser()
@@ -18,6 +22,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [dragActive, setDragActive] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const currentTimelapseIdRef = useRef<string | null>(null)
@@ -28,6 +33,9 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
 
   const uploadFile = useUploadFile(api.r2)
   const createTimelapse = useMutation(api.timelapses.create)
+
+  // Determine if file should use multipart upload
+  const isLargeFile = videoFile && videoFile.size > LARGE_FILE_THRESHOLD
 
   const handleCancel = async () => {
     // Abort ongoing HTTP requests
@@ -67,10 +75,44 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
     setProgress(10)
 
     try {
-      // Upload video to R2
-      setProgress(30)
-      const videoKey = await uploadFile(videoFile)
-      setProgress(70)
+      let videoKey: string
+
+      // Use multipart upload for large files
+      if (isLargeFile) {
+        setUploadStatus('Initializing multipart upload...')
+        setProgress(5)
+
+        const actorUrl = import.meta.env.VITE_UPLOAD_ACTOR_URL
+        if (!actorUrl) {
+          throw new Error('Upload Actor URL not configured. Please set VITE_UPLOAD_ACTOR_URL.')
+        }
+
+        // Generate unique uploader ID based on user and timestamp
+        const uploaderId = `${user.userId}-${Date.now()}`
+
+        setUploadStatus('Uploading file in chunks...')
+        const result = await uploadLargeFile(
+          videoFile,
+          actorUrl,
+          uploaderId,
+          (progressInfo) => {
+            setProgress(Math.min(progressInfo.percentage, 90))
+            setUploadStatus(
+              `Uploading: ${progressInfo.completedParts}/${progressInfo.totalParts} parts (${progressInfo.percentage}%)`
+            )
+          }
+        )
+
+        videoKey = result.key
+        setProgress(90)
+        setUploadStatus('Upload complete, creating database record...')
+      } else {
+        // Regular upload for smaller files
+        setUploadStatus('Uploading...')
+        setProgress(30)
+        videoKey = await uploadFile(videoFile)
+        setProgress(70)
+      }
 
       // Get video metadata (duration and dimensions)
       let originalDuration: number | undefined
@@ -203,6 +245,10 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
 
   const handleFileChange = (file: File | null) => {
     if (file && file.type.startsWith('video/')) {
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`File is too large. Maximum file size is ${MAX_FILE_SIZE / 1024 / 1024 / 1024}GB`)
+        return
+      }
       setVideoFile(file)
     } else if (file) {
       alert('Please select a valid video file')
@@ -312,7 +358,8 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
                       Drop your video here, or click to browse
                     </p>
                     <p className="text-sm text-[#8b949e]">
-                      MP4, MOV, AVI up to 500MB
+                      MP4, MOV, AVI up to 5GB
+                      {isLargeFile && <span className="block text-[#58a6ff] mt-1">Large file detected - will use multipart upload</span>}
                     </p>
                   </>
                 )}
@@ -432,7 +479,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
           {uploading && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-[#8b949e]">Uploading...</span>
+                <span className="text-[#8b949e]">{uploadStatus || 'Uploading...'}</span>
                 <span className="text-[#c9d1d9] font-medium">{progress}%</span>
               </div>
               <div className="w-full bg-[#21262d] rounded-full h-2 overflow-hidden">
@@ -441,6 +488,11 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
                   style={{ width: `${progress}%` }}
                 />
               </div>
+              {isLargeFile && (
+                <p className="text-xs text-[#8b949e]">
+                  Using multipart upload for large file
+                </p>
+              )}
             </div>
           )}
 

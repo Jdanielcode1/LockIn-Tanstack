@@ -1,0 +1,19 @@
+{
+  "name": "cloudflare-upload-actor",
+  "version": "1.0.0",
+  "description": "Cloudflare Actor for handling large file multipart uploads to R2",
+  "main": "src/index.ts",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "@cloudflare/actors": "^0.0.1-beta.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.45.4"
+  }
+}

@@ -215,6 +215,70 @@ When deploying to production:
 - [Convex R2 Component Docs](https://www.convex.dev/components/cloudflare-r2)
 - [R2 Pricing Calculator](https://www.cloudflare.com/products/r2/)
 
+## Large File Uploads (>100MB) - Multipart Upload Actor
+
+For files larger than 100MB, the app automatically uses a **Cloudflare Actor-based multipart upload system** that can handle files up to 5GB (or even larger, up to 5TB with proper configuration).
+
+### How It Works
+
+1. Files >100MB are automatically detected by the frontend
+2. Upload is split into 10MB chunks
+3. Chunks are uploaded in parallel (5 concurrent) to a Cloudflare Durable Object
+4. The Actor tracks upload progress in SQLite storage
+5. When all chunks complete, R2 multipart upload is finalized
+
+### Setup Instructions
+
+1. **Deploy the Upload Actor**:
+   ```bash
+   cd cloudflare-upload-actor
+   npm install
+   npm run deploy
+   ```
+
+2. **Copy the deployed URL** and add to `.env`:
+   ```env
+   VITE_UPLOAD_ACTOR_URL=https://lock-in-upload-actor.your-subdomain.workers.dev
+   ```
+
+3. **Restart your frontend** to pick up the new environment variable
+
+### Benefits
+
+- **No browser memory limits**: Files are streamed directly, not loaded into RAM
+- **Resume capability**: Interrupted uploads can resume from where they left off
+- **Parallel uploads**: Multiple chunks upload simultaneously for faster speeds
+- **Progress tracking**: Real-time progress with completed/total parts display
+- **Automatic**: No code changes needed, works transparently for large files
+
+### Cost Implications
+
+**For a 1GB file upload:**
+- ~100 Actor requests (100 parts × 10MB each): ~$0.000015
+- ~100 R2 Class A operations: ~$0.00045
+- **Total: Less than $0.001 per upload**
+
+The multipart system is very cost-effective and scales well to large files.
+
+### Troubleshooting
+
+**Large file upload fails immediately:**
+- Verify `VITE_UPLOAD_ACTOR_URL` is set in `.env`
+- Check that the Upload Actor is deployed successfully
+- Verify R2 bucket binding in `cloudflare-upload-actor/wrangler.toml`
+
+**Upload progress stalls mid-way:**
+- Check browser console for error messages
+- Verify network connectivity
+- Check Cloudflare dashboard for Actor errors
+
+**Parts upload but don't complete:**
+- View Actor logs with: `cd cloudflare-upload-actor && npm run tail`
+- Check that all parts reached the Actor
+- Verify R2 multipart complete operation didn't error
+
+For more details, see `cloudflare-upload-actor/README.md`.
+
 ## Need Help?
 
 - Cloudflare Community: https://community.cloudflare.com/
