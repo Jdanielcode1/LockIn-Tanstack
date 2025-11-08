@@ -22,6 +22,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const openaiInitializedRef = useRef(false)
   const [copied, setCopied] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
   const meetingRef = useRef(meeting)
   const openaiConnectionRef = useRef(openaiConnection)
@@ -393,6 +394,129 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     }
   }
 
+  const captureScreenshot = async () => {
+    if (!meeting) {
+      console.error('No meeting available')
+      return
+    }
+
+    setIsCapturingScreenshot(true)
+
+    try {
+      console.log('Capturing screenshot from RealtimeKit meeting...')
+
+      // Access the local participant (self) to get video track
+      const self = (meeting as any).self
+      console.log('Self:', self)
+
+      if (!self) {
+        throw new Error('No self participant found')
+      }
+
+      // Try to access video track from self
+      const videoEnabled = (meeting as any).video || self.video
+      console.log('Video enabled:', videoEnabled)
+
+      // Access the actual video track - RealtimeKit likely stores it in self.videoTrack or similar
+      let videoTrack = self.videoTrack || self.video?.track || (meeting as any).video?.track
+
+      // If still not found, try accessing through stores/state
+      if (!videoTrack) {
+        console.log('Trying alternate methods...')
+        const stores = (meeting as any).stores
+        console.log('Stores:', stores)
+
+        // Try different possible locations
+        videoTrack = stores?.video?.track ||
+                     stores?.localVideo?.track ||
+                     self.mediaStream?.getVideoTracks()[0] ||
+                     self.stream?.getVideoTracks()[0]
+      }
+
+      if (!videoTrack) {
+        throw new Error('No video track found. Make sure your camera is on. Available properties: ' +
+          Object.keys(self).join(', '))
+      }
+
+      console.log('Found video track:', {
+        id: videoTrack.id,
+        label: videoTrack.label,
+        enabled: videoTrack.enabled,
+        readyState: videoTrack.readyState,
+      })
+
+      // Create a temporary video element to render the track
+      const video = document.createElement('video')
+      video.autoplay = true
+      video.playsInline = true
+      video.muted = true
+
+      // Set the video source to the MediaStream
+      const stream = new MediaStream([videoTrack])
+      video.srcObject = stream
+
+      // Wait for video to be ready
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Video load timeout')), 5000)
+        video.onloadedmetadata = () => {
+          clearTimeout(timeout)
+          video.play()
+          // Wait a bit more for the first frame to render
+          setTimeout(resolve, 100)
+        }
+      })
+
+      // Create canvas and capture the frame
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth || 1280
+      canvas.height = video.videoHeight || 720
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        throw new Error('Could not get canvas context')
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      // Clean up the video element
+      video.srcObject = null
+
+      // Convert to blob
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob)
+            else reject(new Error('Failed to create blob'))
+          },
+          'image/jpeg',
+          0.9
+        )
+      })
+
+      console.log('Screenshot captured:', {
+        width: canvas.width,
+        height: canvas.height,
+        size: blob.size,
+      })
+
+      // TODO: Upload to R2 and save to database
+      // For now, just download for testing
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `session-${sessionId}-${Date.now()}.jpg`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      alert('Screenshot captured successfully!')
+    } catch (error) {
+      console.error('Error capturing screenshot:', error)
+      alert(`Failed to capture screenshot: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsCapturingScreenshot(false)
+    }
+  }
+
   // Listen for fullscreen changes (user pressing ESC)
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -612,21 +736,44 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
             </div>
 
             {/* Controls */}
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-between gap-3">
               <button
-                onClick={handleLeave}
-                className="px-4 py-2 rounded-md border border-[#f85149] text-[#f85149] hover:bg-[#f85149]/10 transition-colors text-sm font-medium"
+                onClick={captureScreenshot}
+                disabled={!isActive || isCapturingScreenshot}
+                className="px-4 py-2 rounded-md border border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff]/10 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Leave Session
+                {isCapturingScreenshot ? (
+                  <>
+                    <div className="animate-spin text-base">⏳</div>
+                    Capturing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Capture Screenshot
+                  </>
+                )}
               </button>
-              {isCreator && (
+
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={handleEnd}
-                  className="px-4 py-2 rounded-md bg-[#da3633] text-white hover:bg-[#f85149] transition-colors text-sm font-medium"
+                  onClick={handleLeave}
+                  className="px-4 py-2 rounded-md border border-[#f85149] text-[#f85149] hover:bg-[#f85149]/10 transition-colors text-sm font-medium"
                 >
-                  End Session
+                  Leave Session
                 </button>
-              )}
+                {isCreator && (
+                  <button
+                    onClick={handleEnd}
+                    className="px-4 py-2 rounded-md bg-[#da3633] text-white hover:bg-[#f85149] transition-colors text-sm font-medium"
+                  >
+                    End Session
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
