@@ -467,7 +467,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
                   )}
                 </div>
               ) : (
-                <div style={{ height: '600px' }} className="bg-[#0d1117]">
+                <div style={{ height: '700px' }} className="bg-[#0d1117]">
                   {meeting ? (
                     <RealtimeKitProvider value={meeting}>
                       <RtkMeeting mode="fill" meeting={meeting} />
