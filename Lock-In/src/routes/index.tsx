@@ -480,6 +480,8 @@ function Feed() {
                             setPlayingVideo(timelapse._id)
                           }
                         }}
+                        videoWidth={timelapse.videoWidth}
+                        videoHeight={timelapse.videoHeight}
                       />
 
                       {/* Interaction Footer */}

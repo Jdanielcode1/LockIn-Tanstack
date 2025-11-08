@@ -8,9 +8,11 @@ interface InlineVideoPlayerProps {
   thumbnailKey?: string
   isPlaying: boolean
   onTogglePlay: () => void
+  videoWidth?: number
+  videoHeight?: number
 }
 
-export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onTogglePlay }: InlineVideoPlayerProps) {
+export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onTogglePlay, videoWidth, videoHeight }: InlineVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isBuffering, setIsBuffering] = useState(false)
@@ -18,6 +20,33 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(true)
   const [showVideo, setShowVideo] = useState(false)
+
+  // Calculate aspect ratio based on video dimensions
+  const getAspectRatioClass = () => {
+    if (!videoWidth || !videoHeight) {
+      return 'aspect-video' // Default to 16:9 if dimensions not available
+    }
+
+    const aspectRatio = videoWidth / videoHeight
+
+    // Vertical video (TikTok style: 9:16 or portrait)
+    if (aspectRatio < 0.8) {
+      return 'aspect-[9/16]'
+    }
+    // Horizontal video (YouTube style: 16:9 or landscape)
+    else if (aspectRatio > 1.2) {
+      return 'aspect-video'
+    }
+    // Square-ish video
+    else {
+      return 'aspect-square'
+    }
+  }
+
+  const aspectRatioClass = getAspectRatioClass()
+
+  // Check if video is vertical
+  const isVerticalVideo = videoWidth && videoHeight && (videoWidth / videoHeight) < 0.8
 
   // Fetch thumbnail URL if available
   const { data: thumbnailUrl, isLoading: thumbnailLoading } = useQuery({
@@ -90,7 +119,7 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
   // Show loading state while thumbnail is loading (only if we have a thumbnailKey and it's still loading)
   if (thumbnailKey && thumbnailLoading) {
     return (
-      <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]">
+      <div className={`${aspectRatioClass} bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]`}>
         <div className="animate-spin text-4xl">⏳</div>
       </div>
     )
@@ -100,7 +129,7 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
   // (This should be rare since we fetch URL immediately)
   if (showVideo && !videoUrl) {
     return (
-      <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]">
+      <div className={`${aspectRatioClass} bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]`}>
         <div className="flex flex-col items-center gap-2">
           <div className="animate-spin text-4xl">⏳</div>
           <span className="text-xs text-[#8b949e]">Loading video...</span>
@@ -110,12 +139,12 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
   }
 
   return (
-    <div className="relative group bg-[#0d1117] border-y border-[#30363d]">
+    <div className={`relative group bg-[#0d1117] border-y border-[#30363d] ${isVerticalVideo ? 'flex justify-center' : ''}`}>
       {/* Render video element in background to enable preloading, but hide it until user clicks play */}
       {videoUrl && (
         <video
           ref={videoRef}
-          className={`w-full aspect-video ${!showVideo ? 'hidden' : ''}`}
+          className={`${isVerticalVideo ? 'max-w-sm' : 'w-full'} ${aspectRatioClass} ${!showVideo ? 'hidden' : ''}`}
           src={videoUrl}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
@@ -134,7 +163,7 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
           <img
             src={thumbnailUrl}
             alt="Video thumbnail"
-            className="w-full aspect-video object-cover"
+            className={`${isVerticalVideo ? 'max-w-sm' : 'w-full'} ${aspectRatioClass} object-cover`}
           />
           {/* Large play button overlay on thumbnail */}
           <div className="absolute inset-0 flex items-center justify-center">
@@ -151,7 +180,7 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
       ) : !showVideo && !thumbnailUrl && videoUrl ? (
         <>
           {/* No thumbnail available - show placeholder with play button while video preloads */}
-          <div className="w-full aspect-video bg-gradient-to-br from-blue-500/10 to-purple-600/10 flex items-center justify-center">
+          <div className={`${isVerticalVideo ? 'max-w-sm' : 'w-full'} ${aspectRatioClass} bg-gradient-to-br from-blue-500/10 to-purple-600/10 flex items-center justify-center`}>
             <svg className="w-16 h-16 text-[#8b949e]" fill="currentColor" viewBox="0 0 16 16">
               <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm15 0a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/>
               <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
