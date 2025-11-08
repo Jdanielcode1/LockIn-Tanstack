@@ -395,47 +395,119 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   }
 
   const captureScreenshot = async () => {
-    if (!meeting) {
-      console.error('No meeting available')
+    if (!meeting || !videoContainerRef.current) {
+      console.error('No meeting or video container available')
       return
     }
 
     setIsCapturingScreenshot(true)
 
     try {
-      console.log('Capturing screenshot from RealtimeKit meeting...')
+      console.log('Capturing screenshot of entire meeting view...')
 
-      // Access the local participant (self) to get video track
+      // Debug: Check for screen share
       const self = (meeting as any).self
-      console.log('Self:', self)
+      console.log('Self participant:', {
+        screenShareEnabled: self.screenShareEnabled,
+        screenShareTracks: self.screenShareTracks,
+      })
 
-      if (!self) {
-        throw new Error('No self participant found')
+      // Check all participants for screen shares
+      const participants = (meeting as any).participants
+      console.log('Participants:', participants)
+
+      // Try to find screen share track
+      let screenShareTrack = null
+      if (self.screenShareEnabled && self.screenShareTracks) {
+        const videoScreenTrack = self.screenShareTracks.video
+        if (videoScreenTrack) {
+          screenShareTrack = videoScreenTrack
+          console.log('Found local screen share track')
+        }
       }
 
-      // Try to access video track from self
-      const videoEnabled = (meeting as any).video || self.video
-      console.log('Video enabled:', videoEnabled)
+      // Check if any participant is sharing screen
+      if (!screenShareTrack && participants) {
+        for (const participant of Object.values(participants)) {
+          const p = participant as any
+          if (p.screenShareEnabled && p.screenShareTracks?.video) {
+            screenShareTrack = p.screenShareTracks.video
+            console.log('Found screen share from participant:', p.name)
+            break
+          }
+        }
+      }
 
-      // Access the actual video track - RealtimeKit likely stores it in self.videoTrack or similar
-      let videoTrack = self.videoTrack || self.video?.track || (meeting as any).video?.track
+      let videoTrack = null
 
-      // If still not found, try accessing through stores/state
-      if (!videoTrack) {
-        console.log('Trying alternate methods...')
-        const stores = (meeting as any).stores
-        console.log('Stores:', stores)
-
-        // Try different possible locations
-        videoTrack = stores?.video?.track ||
-                     stores?.localVideo?.track ||
-                     self.mediaStream?.getVideoTracks()[0] ||
-                     self.stream?.getVideoTracks()[0]
+      // Priority: Capture screen share if available (for coding sessions)
+      if (screenShareTrack) {
+        console.log('Using screen share track for screenshot')
+        videoTrack = screenShareTrack
+      } else {
+        console.log('No screen share found, capturing from camera...')
+        // Fallback to camera if no screen share
+        videoTrack = self.videoTrack
       }
 
       if (!videoTrack) {
-        throw new Error('No video track found. Make sure your camera is on. Available properties: ' +
-          Object.keys(self).join(', '))
+        console.log('No camera or screen share found, capturing from rendered video container...')
+
+        // Fallback: Try to find ANY video element in the DOM and capture it
+        const videoElement = videoContainerRef.current.querySelector('video')
+
+        if (videoElement) {
+          console.log('Found video element, capturing directly from it')
+
+          // Create canvas and capture from the video element
+          const canvas = document.createElement('canvas')
+          canvas.width = videoElement.videoWidth || 1280
+          canvas.height = videoElement.videoHeight || 720
+
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            throw new Error('Could not get canvas context')
+          }
+
+          ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+
+          // Convert to blob
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(
+              (blob) => {
+                if (blob) resolve(blob)
+                else reject(new Error('Failed to create blob'))
+              },
+              'image/jpeg',
+              0.9
+            )
+          })
+
+          console.log('Screenshot captured from video element:', {
+            width: canvas.width,
+            height: canvas.height,
+            size: blob.size,
+          })
+
+          // Download for testing
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `session-${sessionId}-${Date.now()}.jpg`
+          a.click()
+          URL.revokeObjectURL(url)
+
+          alert('Screenshot captured successfully!')
+          return
+        }
+
+        // If no video element found, use self camera as last resort
+        videoTrack = self.videoTrack
+        console.log('Using self camera track as fallback')
+      }
+
+      if (!videoTrack) {
+        throw new Error('No video source found for screenshot')
       }
 
       console.log('Found video track:', {
