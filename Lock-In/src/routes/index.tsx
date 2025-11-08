@@ -194,35 +194,6 @@ function Feed() {
     return startOfWeek.getTime()
   }
 
-  const handleCancelProcessing = async (timelapseId: string) => {
-    const workerUrl = import.meta.env.VITE_WORKER_URL
-    if (!workerUrl) {
-      alert('Worker URL not configured')
-      return
-    }
-
-    if (!confirm('Are you sure you want to cancel this processing job?')) {
-      return
-    }
-
-    try {
-      console.log(`Cancelling processing for timelapse: ${timelapseId}`)
-      const response = await fetch(`${workerUrl}/cancel/${timelapseId}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to cancel processing')
-      }
-
-      alert('Processing cancelled successfully')
-      // The feed will automatically update via Convex reactivity
-    } catch (error) {
-      console.error('Error cancelling processing:', error)
-      alert('Failed to cancel processing. Please try again.')
-    }
-  }
-
   return (
     <main className="min-h-screen bg-[#0d1117]">
       <div className="container mx-auto px-4 py-6 max-w-[1600px]">
@@ -497,8 +468,19 @@ function Feed() {
                         </div>
                       </div>
 
-                      {/* Video Thumbnail */}
-                      <ThumbnailDisplay timelapse={timelapse} />
+                      {/* Video Player */}
+                      <InlineVideoPlayer
+                        videoKey={timelapse.videoKey}
+                        thumbnailKey={timelapse.thumbnailKey}
+                        isPlaying={playingVideo === timelapse._id}
+                        onTogglePlay={() => {
+                          if (playingVideo === timelapse._id) {
+                            setPlayingVideo(null)
+                          } else {
+                            setPlayingVideo(timelapse._id)
+                          }
+                        }}
+                      />
 
                       {/* Interaction Footer */}
                       <div className="p-4">
@@ -638,101 +620,3 @@ function Feed() {
   )
 }
 
-// Thumbnail display component (same as TimelapseCard in project detail)
-function ThumbnailDisplay({ timelapse }: { timelapse: any }) {
-  const { data: thumbnailUrl } = useQuery({
-    ...convexQuery(api.r2.getThumbnailUrl, {
-      thumbnailKey: timelapse.thumbnailKey || '',
-    }),
-    enabled: !!timelapse.thumbnailKey,
-  })
-
-  // Calculate aspect ratio from video dimensions
-  const getAspectRatioClass = () => {
-    if (!timelapse.videoWidth || !timelapse.videoHeight) {
-      return 'aspect-video' // Default to 16:9 if dimensions not available
-    }
-
-    const aspectRatio = timelapse.videoWidth / timelapse.videoHeight
-
-    // Vertical video (TikTok style: 9:16 or portrait)
-    if (aspectRatio < 0.8) {
-      return 'aspect-[9/16]'
-    }
-    // Horizontal video (YouTube style: 16:9 or landscape)
-    else if (aspectRatio > 1.2) {
-      return 'aspect-video'
-    }
-    // Square-ish video
-    else {
-      return 'aspect-square'
-    }
-  }
-
-  // Check if vertical video to apply max height constraint
-  const isVertical = timelapse.videoWidth && timelapse.videoHeight && (timelapse.videoWidth / timelapse.videoHeight) < 0.8
-
-  return (
-    <Link
-      to="/timelapse/$timelapseId"
-      params={{ timelapseId: timelapse._id }}
-      className="block"
-    >
-      <div className={`${isVertical ? 'w-full max-w-[450px] mx-auto aspect-[9/16] max-h-[750px]' : getAspectRatioClass()} bg-[#0d1117] flex items-center justify-center relative overflow-hidden border-y border-[#30363d]`}>
-        {thumbnailUrl ? (
-          <img
-            src={thumbnailUrl}
-            alt="Timelapse thumbnail"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-600/10"></div>
-        )}
-
-        {/* Processing Status Badge */}
-        {timelapse.processingStatus && timelapse.processingStatus !== 'complete' && (
-          <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
-            {timelapse.processingStatus === 'failed' ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
-                </svg>
-                Failed
-              </span>
-            ) : (
-              <>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
-                  <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                  </svg>
-                  {timelapse.processingStatus === 'pending' ? 'Queued' : 'Processing'}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    handleCancelProcessing(timelapse._id)
-                  }}
-                  className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition"
-                  title="Cancel processing"
-                >
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
-                  </svg>
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {!thumbnailUrl && (
-          <svg className="w-16 h-16 text-[#8b949e] relative z-10 hover:text-[#58a6ff] transition" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm15 0a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/>
-            <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
-          </svg>
-        )}
-      </div>
-    </Link>
-  )
-}

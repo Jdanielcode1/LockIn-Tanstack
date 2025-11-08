@@ -13,6 +13,7 @@ interface InlineVideoPlayerProps {
 export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onTogglePlay }: InlineVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isBuffering, setIsBuffering] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(true)
@@ -26,8 +27,9 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
     enabled: !!thumbnailKey,
   })
 
-  // Only fetch video URL when we need to show the video (after user clicks play or no thumbnail available)
-  const shouldFetchVideo = showVideo || !thumbnailKey
+  // Fetch video URL immediately to enable progressive loading
+  // Browser will download first few seconds with preload="metadata"
+  const shouldFetchVideo = true
   const { data: videoUrl } = useQuery({
     ...convexQuery(api.r2.getVideoUrl, { videoKey }),
     enabled: shouldFetchVideo,
@@ -57,6 +59,14 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
     }
   }
 
+  const handleWaiting = () => {
+    setIsBuffering(true)
+  }
+
+  const handleCanPlay = () => {
+    setIsBuffering(false)
+  }
+
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!videoRef.current || !duration) return
     
@@ -77,7 +87,7 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
-  // Show loading state while thumbnail is loading
+  // Show loading state while thumbnail is loading (only if we have a thumbnailKey and it's still loading)
   if (thumbnailKey && thumbnailLoading) {
     return (
       <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]">
@@ -86,17 +96,38 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
     )
   }
 
-  // If we need video but don't have it yet, show loading
-  if (shouldFetchVideo && !videoUrl) {
+  // If user clicked play but video URL isn't ready yet, show loading
+  // (This should be rare since we fetch URL immediately)
+  if (showVideo && !videoUrl) {
     return (
       <div className="aspect-video bg-[#0d1117] flex items-center justify-center border-y border-[#30363d]">
-        <div className="animate-spin text-4xl">⏳</div>
+        <div className="flex flex-col items-center gap-2">
+          <div className="animate-spin text-4xl">⏳</div>
+          <span className="text-xs text-[#8b949e]">Loading video...</span>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="relative group bg-[#0d1117] border-y border-[#30363d]">
+      {/* Render video element in background to enable preloading, but hide it until user clicks play */}
+      {videoUrl && (
+        <video
+          ref={videoRef}
+          className={`w-full aspect-video ${!showVideo ? 'hidden' : ''}`}
+          src={videoUrl}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onWaiting={handleWaiting}
+          onCanPlay={handleCanPlay}
+          onEnded={() => onTogglePlay()}
+          muted={isMuted}
+          playsInline
+          preload="metadata"
+        />
+      )}
+
       {/* Show thumbnail if available and video hasn't been loaded yet */}
       {!showVideo && thumbnailUrl ? (
         <>
@@ -117,22 +148,32 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
             </button>
           </div>
         </>
-      ) : (
+      ) : !showVideo && !thumbnailUrl && videoUrl ? (
         <>
-          {/* Show video when thumbnail is not available or user has clicked play */}
-          <video
-            ref={videoRef}
-            className="w-full aspect-video"
-            src={videoUrl}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onEnded={() => onTogglePlay()}
-            muted={isMuted}
-            playsInline
-          />
+          {/* No thumbnail available - show placeholder with play button while video preloads */}
+          <div className="w-full aspect-video bg-gradient-to-br from-blue-500/10 to-purple-600/10 flex items-center justify-center">
+            <svg className="w-16 h-16 text-[#8b949e]" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm15 0a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/>
+              <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+            </svg>
+          </div>
+          {/* Large play button overlay */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <button
+              onClick={onTogglePlay}
+              className="w-20 h-20 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition"
+            >
+              <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+              </svg>
+            </button>
+          </div>
+        </>
+      ) : null}
 
-          {/* Overlay Controls */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Overlay Controls - shown when video is playing */}
+      {showVideo && videoUrl && (
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
             {!isPlaying && !isLoading && (
               <button
                 onClick={onTogglePlay}
@@ -144,22 +185,22 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
               </button>
             )}
 
-            {isPlaying && (
-              <button
-                onClick={onTogglePlay}
-                className="w-20 h-20 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition opacity-0 group-hover:opacity-100"
-              >
-                <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
-                </svg>
-              </button>
-            )}
-          </div>
-        </>
+          {isPlaying && (
+            <button
+              onClick={onTogglePlay}
+              className="w-20 h-20 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition opacity-0 group-hover:opacity-100"
+            >
+              <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
+              </svg>
+            </button>
+          )}
+        </div>
       )}
 
-      {/* Bottom Controls Bar */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Bottom Controls Bar - only show when video is playing */}
+      {showVideo && videoUrl && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
         {/* Progress Bar */}
         <div
           onClick={handleSeek}
@@ -228,11 +269,18 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
             </svg>
           </button>
         </div>
-      </div>
+        </div>
+      )}
 
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#0d1117]">
-          <div className="animate-spin text-4xl">⏳</div>
+      {/* Show buffering indicator when video is loading or buffering */}
+      {(isLoading || isBuffering) && showVideo && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0d1117]/80 z-30">
+          <div className="flex flex-col items-center gap-2">
+            <div className="animate-spin text-4xl">⏳</div>
+            <span className="text-xs text-[#8b949e]">
+              {isLoading ? 'Loading...' : 'Buffering...'}
+            </span>
+          </div>
         </div>
       )}
     </div>
