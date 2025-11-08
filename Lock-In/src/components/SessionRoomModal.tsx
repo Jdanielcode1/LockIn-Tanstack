@@ -21,6 +21,8 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const [aiAgentConnected, setAiAgentConnected] = useState(false)
   const openaiInitializedRef = useRef(false)
   const [copied, setCopied] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const videoContainerRef = useRef<HTMLDivElement>(null)
 
   // Fetch session details
   const { data: session } = useSuspenseQuery(
@@ -328,6 +330,38 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     }
   }
 
+  const toggleFullscreen = async () => {
+    if (!videoContainerRef.current) return
+
+    try {
+      if (!isFullscreen) {
+        // Enter fullscreen
+        if (videoContainerRef.current.requestFullscreen) {
+          await videoContainerRef.current.requestFullscreen()
+        }
+        setIsFullscreen(true)
+      } else {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+          await document.exitFullscreen()
+        }
+        setIsFullscreen(false)
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error)
+    }
+  }
+
+  // Listen for fullscreen changes (user pressing ESC)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
   if (!session) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -420,7 +454,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
             </div>
 
             {/* Video Meeting */}
-            <div className="rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden">
+            <div className="rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden relative">
               {!isActive ? (
                 <div className="p-12 text-center">
                   <svg
@@ -467,20 +501,38 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
                   )}
                 </div>
               ) : (
-                <div style={{ height: '700px' }} className="bg-[#0d1117]">
-                  {meeting ? (
-                    <RealtimeKitProvider value={meeting}>
-                      <RtkMeeting mode="fill" meeting={meeting} />
-                    </RealtimeKitProvider>
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center">
-                        <div className="animate-spin text-4xl mb-4">⏳</div>
-                        <p className="text-[#8b949e]">Connecting to video session...</p>
+                <>
+                  {/* Fullscreen Button */}
+                  <button
+                    onClick={toggleFullscreen}
+                    className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 rounded-md text-white transition-colors"
+                    title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                  >
+                    {isFullscreen ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                      </svg>
+                    )}
+                  </button>
+                  <div ref={videoContainerRef} style={{ height: '700px' }} className="bg-[#0d1117]">
+                    {meeting ? (
+                      <RealtimeKitProvider value={meeting}>
+                        <RtkMeeting mode="fill" meeting={meeting} />
+                      </RealtimeKitProvider>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <div className="animate-spin text-4xl mb-4">⏳</div>
+                          <p className="text-[#8b949e]">Connecting to video session...</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
 
