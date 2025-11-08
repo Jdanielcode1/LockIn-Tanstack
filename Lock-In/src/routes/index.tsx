@@ -2,8 +2,8 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { useSuspenseQuery, useQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { api } from '../../convex/_generated/api'
-import { useState, Suspense } from 'react'
-import { useMutation } from 'convex/react'
+import { useState, Suspense, useEffect, useRef, useCallback } from 'react'
+import { useMutation, usePaginatedQuery } from 'convex/react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { CreateProjectModal } from '../components/CreateProjectModal'
 import { AllProjectsModal } from '../components/AllProjectsModal'
@@ -32,17 +32,22 @@ export const Route = createFileRoute('/')({
 
 function Feed() {
   const { user } = useUser()
-  const [cursor, setCursor] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showAllProjectsModal, setShowAllProjectsModal] = useState(false)
   const [commentingOn, setCommentingOn] = useState<string | null>(null)
   const [commentText, setCommentText] = useState('')
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const { data: feedData } = useSuspenseQuery(
-    convexQuery(api.timelapses.listFeed, {
-      paginationOpts: { numItems: 10, cursor: cursor },
-    })
+  // Use Convex's built-in paginated query for smooth pagination
+  const { results: allItems, status, loadMore } = usePaginatedQuery(
+    api.timelapses.listFeed,
+    {},
+    { initialNumItems: 10 }
   )
+
+  // Derived states from Convex pagination status
+  const hasNextPage = status === "CanLoadMore"
+  const isFetchingNextPage = status === "LoadingMore"
 
   const { data: stats } = useSuspenseQuery(
     convexQuery(api.stats.getOverallStats, {})
@@ -70,9 +75,33 @@ function Feed() {
   const [likingInProgress, setLikingInProgress] = useState<Set<string>>(new Set())
   const [playingVideo, setPlayingVideo] = useState<string | null>(null)
   const [showComments, setShowComments] = useState<string | null>(null)
-  
+
   const toggleLikeMutation = useMutation(api.social.toggleLike)
   const addCommentMutation = useMutation(api.social.addComment)
+
+  // Intersection Observer for infinite scroll
+  const loadMoreItems = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      loadMore(10)
+    }
+  }, [hasNextPage, isFetchingNextPage, loadMore])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreItems()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [loadMoreItems])
 
   const handleLike = async (timelapseId: Id<'timelapses'>, currentLikes: number) => {
     // Prevent double-clicking
@@ -295,13 +324,13 @@ function Feed() {
               {/* Latest Activity */}
               <div className="bg-[#161b22] border border-[#30363d] rounded-md p-4">
                 <h3 className="text-sm font-semibold text-[#c9d1d9] mb-3">Latest Activity</h3>
-                {feedData.page.length > 0 ? (
+                {allItems.length > 0 ? (
                   <div>
                     <p className="text-sm text-[#c9d1d9] font-medium mb-1">
-                      {feedData.page[0].projectTitle}
+                      {allItems[0].projectTitle}
                     </p>
                     <p className="text-xs text-[#8b949e]">
-                      {getRelativeTime(feedData.page[0].uploadedAt)}
+                      {getRelativeTime(allItems[0].uploadedAt)}
                     </p>
                   </div>
                 ) : (
@@ -393,7 +422,7 @@ function Feed() {
 
           {/* Main Feed */}
           <div className="max-w-[680px] mx-auto">
-            {feedData.page.length === 0 ? (
+            {allItems.length === 0 ? (
               <div className="text-center py-16 bg-[#161b22] border border-[#30363d] rounded-md">
                 <div className="text-[#8b949e] text-6xl mb-4">📹</div>
                 <h2 className="text-2xl font-semibold text-[#c9d1d9] mb-2">
@@ -412,7 +441,7 @@ function Feed() {
             ) : (
               <>
                 <div className="space-y-4">
-                  {feedData.page.map((timelapse) => (
+                  {allItems.map((timelapse) => (
                     <article
                       key={timelapse._id}
                       className="bg-[#161b22] border border-[#30363d] rounded-md overflow-hidden hover:border-[#8b949e] transition"
@@ -581,15 +610,16 @@ function Feed() {
                   ))}
             </div>
 
-                {!feedData.isDone && (
-                  <div className="text-center mt-6">
-                    <button
-                      onClick={() => setCursor(feedData.continueCursor)}
-                      className="bg-[#21262d] border border-[#30363d] text-[#c9d1d9] px-4 py-2 rounded-md hover:bg-[#30363d] transition text-sm font-medium"
-                    >
-                      Show more activities
-                    </button>
-            </div>
+                {/* Loading indicator and sentinel for infinite scroll */}
+                {hasNextPage && (
+                  <div ref={sentinelRef} className="text-center py-8">
+                    {isFetchingNextPage && (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="animate-spin text-3xl">⏳</div>
+                        <span className="text-xs text-[#8b949e]">Loading more...</span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </>
             )}
