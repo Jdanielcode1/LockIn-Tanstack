@@ -279,7 +279,7 @@ export default {
       let timelapseId; // Declare in outer scope for catch block
       try {
         const body = await request.json();
-        const { videoKey, samplingFps = 1 } = body;
+        const { videoKey } = body;
         timelapseId = body.timelapseId;
 
         if (!videoKey || !timelapseId) {
@@ -289,7 +289,7 @@ export default {
           );
         }
 
-        console.log(`Processing video: ${videoKey} with sampling rate: ${samplingFps}fps`);
+        console.log(`Processing video: ${videoKey} with intelligent timelapse`);
 
         // Update status to "processing"
         await updateConvexStatus(env, timelapseId, 'processing');
@@ -308,7 +308,7 @@ export default {
             new Request('http://container/process', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ videoUrl, samplingFps, timelapseId }),
+              body: JSON.stringify({ videoUrl, timelapseId }),
             })
           ),
           5 * 60 * 1000, // 5 minutes
@@ -320,20 +320,8 @@ export default {
           throw new Error(`Container processing failed: ${errorText}`);
         }
 
-        const { videoBase64 } = await containerResponse.json();
-        console.log('Received processed video from container, uploading to R2...');
-
-        // Decode base64 and upload to R2
-        const videoBuffer = Uint8Array.from(atob(videoBase64), c => c.charCodeAt(0));
-        const processedVideoKey = `timelapses/${crypto.randomUUID()}.mp4`;
-
-        await env.R2_BUCKET.put(processedVideoKey, videoBuffer, {
-          httpMetadata: {
-            contentType: 'video/mp4',
-          },
-        });
-
-        console.log('Successfully uploaded processed video to R2:', processedVideoKey);
+        const { processedVideoKey, speedMultiplier, estimatedOutputDuration, samplingFps } = await containerResponse.json();
+        console.log(`Container processed video successfully (${speedMultiplier}x speed, ~${estimatedOutputDuration}s output), uploaded to R2: ${processedVideoKey}`);
 
         // Update Convex with success
         await updateConvexStatus(env, timelapseId, 'complete', processedVideoKey);

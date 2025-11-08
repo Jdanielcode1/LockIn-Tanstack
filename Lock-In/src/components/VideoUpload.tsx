@@ -14,6 +14,7 @@ interface VideoUploadProps {
 
 const LARGE_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024 // 5GB
+const PROCESSING_SIZE_LIMIT = 500 * 1024 * 1024 // 500MB - max size for timelapse processing
 
 export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProps) {
   const { user } = useUser()
@@ -28,14 +29,16 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
   const currentTimelapseIdRef = useRef<string | null>(null)
 
   // Timelapse processing state
+  const [isAlreadyTimelapse, setIsAlreadyTimelapse] = useState(false)
   const [makeTimelapse, setMakeTimelapse] = useState(false)
-  const [speedMultiplier, setSpeedMultiplier] = useState(8)
 
   const uploadFile = useUploadFile(api.r2)
   const createTimelapse = useMutation(api.timelapses.create)
 
   // Determine if file should use multipart upload
   const isLargeFile = videoFile && videoFile.size > LARGE_FILE_THRESHOLD
+  // Check if file is too large for processing
+  const isTooLargeForProcessing = videoFile && videoFile.size > PROCESSING_SIZE_LIMIT
 
   const handleCancel = async () => {
     // Abort ongoing HTTP requests
@@ -45,7 +48,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
     }
 
     // Cancel server-side processing if a timelapse is being processed
-    if (currentTimelapseIdRef.current && makeTimelapse) {
+    if (currentTimelapseIdRef.current && makeTimelapse && !isAlreadyTimelapse) {
       const workerUrl = import.meta.env.VITE_WORKER_URL
       if (workerUrl) {
         try {
@@ -135,35 +138,34 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
       }
 
       // Create timelapse record in database
+      const shouldProcess = makeTimelapse && !isAlreadyTimelapse
       const { timelapseId } = await createTimelapse({
         userId: user.userId,
         projectId,
         videoKey,
         durationMinutes: parseFloat(durationMinutes),
-        isTimelapse: makeTimelapse,
-        speedMultiplier: makeTimelapse ? speedMultiplier : undefined,
-        originalDuration: makeTimelapse ? originalDuration : undefined,
+        isTimelapse: makeTimelapse || isAlreadyTimelapse,
+        originalDuration: shouldProcess ? originalDuration : undefined,
         videoWidth,
         videoHeight,
-        requestProcessing: makeTimelapse, // Request server-side processing
+        requestProcessing: shouldProcess, // Only request processing if not already a timelapse
       })
 
       // Store timelapseId for cancellation
       currentTimelapseIdRef.current = timelapseId
 
       // If processing requested, trigger Cloudflare Worker
-      if (makeTimelapse) {
+      if (shouldProcess) {
         const workerUrl = import.meta.env.VITE_WORKER_URL
 
         if (workerUrl) {
           const processUrl = `${workerUrl}/process`
           const payload = {
             videoKey,
-            samplingFps: speedMultiplier, // Use samplingFps parameter for true timelapse
             timelapseId,
           }
 
-          console.log('Triggering video processing:', processUrl, payload)
+          console.log('Triggering intelligent timelapse processing:', processUrl, payload)
 
           // Fire and forget - processing happens in background
           fetch(processUrl, {
@@ -394,31 +396,50 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
             </p>
           </div>
 
-          {/* Timelapse Option */}
-          <div className="border-t border-[#30363d] pt-5">
+          {/* Timelapse Options */}
+          <div className="border-t border-[#30363d] pt-5 space-y-4">
+            {/* Warning for files too large for processing */}
+            {isTooLargeForProcessing && !isAlreadyTimelapse && (
+              <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+                <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-yellow-500">File too large for processing</p>
+                  <p className="text-xs text-[#8b949e] mt-1">
+                    Videos over 500MB cannot be processed into timelapses due to memory constraints. Check "This is already a timelapse" to upload as-is, or compress your video first.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Already a timelapse checkbox */}
             <div className="flex items-start gap-3">
               <div className="relative flex items-center">
                 <input
                   type="checkbox"
-                  id="timelapse-checkbox"
-                  checked={makeTimelapse}
-                  onChange={(e) => setMakeTimelapse(e.target.checked)}
+                  id="already-timelapse-checkbox"
+                  checked={isAlreadyTimelapse}
+                  onChange={(e) => {
+                    setIsAlreadyTimelapse(e.target.checked)
+                    if (e.target.checked) setMakeTimelapse(false)
+                  }}
                   disabled={uploading}
                   className="peer sr-only"
                 />
                 <label
-                  htmlFor="timelapse-checkbox"
+                  htmlFor="already-timelapse-checkbox"
                   className={`relative w-5 h-5 border-2 rounded transition-all ${
                     uploading
                       ? 'opacity-50 cursor-not-allowed'
                       : 'cursor-pointer'
                   } ${
-                    makeTimelapse
-                      ? 'bg-[#238636] border-[#238636]'
+                    isAlreadyTimelapse
+                      ? 'bg-[#58a6ff] border-[#58a6ff]'
                       : 'bg-[#0d1117] border-[#30363d] hover:border-[#8b949e]'
                   }`}
                 >
-                  {makeTimelapse && (
+                  {isAlreadyTimelapse && (
                     <svg
                       className="absolute inset-0 w-5 h-5 text-white"
                       fill="none"
@@ -437,38 +458,67 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
               </div>
               <div className="flex-1">
                 <label
-                  htmlFor="timelapse-checkbox"
+                  htmlFor="already-timelapse-checkbox"
                   className="block text-sm font-medium text-[#c9d1d9] cursor-pointer"
                 >
-                  Create timelapse (server-side processing)
+                  This is already a timelapse
                 </label>
                 <p className="text-xs text-[#8b949e] mt-1">
-                  Video will be processed on our servers after upload. You can navigate away and check back later.
+                  Skip processing if your video is already time-compressed. Perfect for uploads from other apps.
                 </p>
               </div>
             </div>
 
-            {makeTimelapse && (
-              <div className="mt-4 ml-8 space-y-3">
-                <div>
-                  <label htmlFor="speed" className="block text-sm font-medium text-[#c9d1d9] mb-2">
-                    Speed multiplier
-                  </label>
-                  <select
-                    id="speed"
-                    value={speedMultiplier}
-                    onChange={(e) => setSpeedMultiplier(Number(e.target.value))}
-                    disabled={uploading}
-                    className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-md text-[#c9d1d9] text-sm focus:border-[#58a6ff] focus:ring-1 focus:ring-[#58a6ff] focus:outline-none transition"
+            {/* Create timelapse checkbox - only show if not already a timelapse */}
+            {!isAlreadyTimelapse && (
+              <div className="flex items-start gap-3">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    id="timelapse-checkbox"
+                    checked={makeTimelapse}
+                    onChange={(e) => setMakeTimelapse(e.target.checked)}
+                    disabled={uploading || isTooLargeForProcessing}
+                    className="peer sr-only"
+                  />
+                  <label
+                    htmlFor="timelapse-checkbox"
+                    className={`relative w-5 h-5 border-2 rounded transition-all ${
+                      uploading || isTooLargeForProcessing
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'cursor-pointer'
+                    } ${
+                      makeTimelapse
+                        ? 'bg-[#238636] border-[#238636]'
+                        : 'bg-[#0d1117] border-[#30363d] hover:border-[#8b949e]'
+                    }`}
                   >
-                    <option value={2}>2x faster</option>
-                    <option value={4}>4x faster</option>
-                    <option value={8}>8x faster (recommended)</option>
-                    <option value={16}>16x faster</option>
-                    <option value={32}>32x faster</option>
-                  </select>
-                  <p className="text-xs text-[#8b949e] mt-2">
-                    Processing happens on our servers using FFmpeg
+                    {makeTimelapse && (
+                      <svg
+                        className="absolute inset-0 w-5 h-5 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    )}
+                  </label>
+                </div>
+                <div className="flex-1">
+                  <label
+                    htmlFor="timelapse-checkbox"
+                    className="block text-sm font-medium text-[#c9d1d9] cursor-pointer"
+                  >
+                    Create intelligent timelapse
+                  </label>
+                  <p className="text-xs text-[#8b949e] mt-1">
+                    Automatically optimized for your video length. Short videos → 15x speed, long videos → up to 900x speed. Creates 1-3 minute watchable clips.
                   </p>
                 </div>
               </div>

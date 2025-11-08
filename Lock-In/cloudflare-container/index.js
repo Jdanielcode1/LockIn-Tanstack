@@ -1,6 +1,9 @@
 const express = require('express');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { Upload } = require('@aws-sdk/lib-storage');
 const { spawn } = require('child_process');
+const { pipeline } = require('stream/promises');
+const { createWriteStream, createReadStream } = require('fs');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -38,10 +41,11 @@ const s3Client = new S3Client({
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME;
 const TMP_DIR = '/tmp';
+const PROCESSING_SIZE_LIMIT = 500 * 1024 * 1024; // 500MB - max size for processing
 
-// Download file from URL
+// Download file from URL (streaming - no memory buffer)
 async function downloadFromUrl(url) {
-  console.log('Downloading video from URL:', url.substring(0, 100) + '...');
+  console.log('Downloading video from URL (streaming):', url.substring(0, 100) + '...');
 
   const tmpPath = path.join(TMP_DIR, `input-${Date.now()}.mp4`);
 
@@ -50,8 +54,12 @@ async function downloadFromUrl(url) {
     throw new Error(`Failed to download video: ${response.statusText}`);
   }
 
-  const buffer = await response.arrayBuffer();
-  fs.writeFileSync(tmpPath, Buffer.from(buffer));
+  // Convert Web Stream to Node.js stream and pipe to file
+  const { Readable } = require('stream');
+  const nodeStream = Readable.fromWeb(response.body);
+  const fileStream = createWriteStream(tmpPath);
+
+  await pipeline(nodeStream, fileStream);
 
   console.log('Video downloaded successfully to:', tmpPath);
   return tmpPath;
@@ -76,18 +84,122 @@ async function uploadToR2(filePath, prefix = 'videos') {
   return key;
 }
 
-// Process video with FFmpeg - True timelapse via frame sampling
-async function processVideo(inputPath, outputPath, samplingFps, timelapseId = null) {
+// Upload video to R2 using multipart streaming (no memory buffer)
+async function uploadVideoToR2(filePath, prefix = 'timelapses') {
+  const key = `${prefix}/${crypto.randomUUID()}.mp4`;
+  const fileStream = createReadStream(filePath);
+  const fileStats = fs.statSync(filePath);
+
+  console.log(`Streaming upload to R2: ${key} (${Math.round(fileStats.size / 1024 / 1024)}MB)`);
+
+  const upload = new Upload({
+    client: s3Client,
+    params: {
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: fileStream,
+      ContentType: 'video/mp4',
+    },
+    // Upload in 10MB chunks
+    partSize: 10 * 1024 * 1024,
+    queueSize: 4, // 4 concurrent uploads
+  });
+
+  upload.on('httpUploadProgress', (progress) => {
+    if (progress.loaded && progress.total) {
+      const percentage = Math.round((progress.loaded / progress.total) * 100);
+      console.log(`Upload progress: ${percentage}% (${Math.round(progress.loaded / 1024 / 1024)}MB / ${Math.round(progress.total / 1024 / 1024)}MB)`);
+    }
+  });
+
+  await upload.done();
+  console.log(`Successfully streamed upload to R2: ${key}`);
+  return key;
+}
+
+// Get video metadata using FFprobe
+async function getVideoMetadata(inputPath) {
   return new Promise((resolve, reject) => {
-    // Use fps filter for true timelapse effect (frame sampling)
-    // Example: 60fps video with samplingFps=1 → captures 1 frame per second (60x compression)
+    const ffprobe = spawn('ffprobe', [
+      '-v', 'error',
+      '-select_streams', 'v:0',
+      '-show_entries', 'stream=r_frame_rate,width,height:format=duration',
+      '-of', 'json',
+      inputPath
+    ]);
+
+    let output = '';
+    ffprobe.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    ffprobe.on('close', (code) => {
+      if (code === 0) {
+        try {
+          const data = JSON.parse(output);
+          const duration = parseFloat(data.format.duration);
+          const fpsStr = data.streams[0].r_frame_rate;
+          const [num, den] = fpsStr.split('/').map(Number);
+          const fps = num / den;
+          const width = data.streams[0].width;
+          const height = data.streams[0].height;
+
+          resolve({ duration, fps, width, height });
+        } catch (err) {
+          reject(new Error(`Failed to parse ffprobe output: ${err.message}`));
+        }
+      } else {
+        reject(new Error(`ffprobe exited with code ${code}`));
+      }
+    });
+
+    ffprobe.on('error', reject);
+  });
+}
+
+// Calculate optimal sampling rate based on video duration (matching iOS behavior)
+function calculateSamplingRate(durationMinutes) {
+  // iOS sampling schedule:
+  // 0-10 min: 2 fps → 15x speed
+  // 10-20 min: 1 fps → 30x speed
+  // 20-80 min: 0.5 fps → 60x speed
+  // 80+ min: 0.033 fps (1 frame/30s) → 900x speed
+
+  if (durationMinutes <= 10) {
+    return { samplingFps: 2, speedMultiplier: 15 };
+  } else if (durationMinutes <= 20) {
+    return { samplingFps: 1, speedMultiplier: 30 };
+  } else if (durationMinutes <= 80) {
+    return { samplingFps: 0.5, speedMultiplier: 60 };
+  } else {
+    return { samplingFps: 0.033, speedMultiplier: 900 }; // 1 frame per 30 seconds
+  }
+}
+
+// Calculate expected output duration
+function calculateOutputDuration(inputDurationSeconds, samplingFps) {
+  // Frames captured = duration * samplingFps
+  // Output duration = frames / 30 fps playback
+  const framesCaptured = inputDurationSeconds * samplingFps;
+  const outputDuration = framesCaptured / 30;
+  return Math.round(outputDuration);
+}
+
+// Process video with FFmpeg - True timelapse via frame sampling with 30fps playback
+async function processVideo(inputPath, outputPath, samplingFps, timelapseId = null, progressCallback = null) {
+  return new Promise((resolve, reject) => {
+    // TRUE TIMELAPSE: Sample at low fps, play at 30 fps
+    // Example: fps=2 (capture 2 frames/sec) + setpts for 30fps playback = 15x speed
     const ffmpeg = spawn('ffmpeg', [
       '-i', inputPath,
-      '-filter:v', `fps=${samplingFps}`, // Frame sampling for true timelapse
+      '-vf', `fps=${samplingFps},setpts=N/(30*TB),scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2`, // Sample + set timing for 30fps + scale
+      '-r', '30', // Output framerate
       '-an', // Remove audio
+      '-c:v', 'libx264', // H264 codec
+      '-crf', '23', // Quality control
+      '-preset', 'ultrafast', // Fast encoding
+      '-movflags', '+faststart', // Web optimized
       '-y', // Overwrite output file
-      '-c:v', 'libx264', // Re-encode with h264
-      '-preset', 'fast', // Fast encoding preset
       outputPath
     ]);
 
@@ -255,7 +367,7 @@ async function updateConvexStatus(timelapseId, status, processedVideoKey = null,
 
 // Main processing endpoint
 app.post('/process', async (req, res) => {
-  const { videoUrl, samplingFps = 1, timelapseId } = req.body;
+  const { videoUrl, timelapseId } = req.body;
 
   if (!videoUrl) {
     return res.status(400).json({ error: 'videoUrl is required' });
@@ -265,35 +377,74 @@ app.post('/process', async (req, res) => {
     return res.status(400).json({ error: 'timelapseId is required' });
   }
 
-  console.log(`Processing video from URL with sampling rate: ${samplingFps}fps for timelapse: ${timelapseId}`);
+  console.log(`Processing video with intelligent timelapse for: ${timelapseId}`);
 
   let inputPath, outputPath;
 
   try {
+    // Check file size before processing
+    console.log('Checking video size...');
+    const headResponse = await fetch(videoUrl, { method: 'HEAD' });
+    const contentLength = parseInt(headResponse.headers.get('content-length') || '0');
+
+    if (contentLength > PROCESSING_SIZE_LIMIT) {
+      const sizeMB = Math.round(contentLength / 1024 / 1024);
+      const limitMB = Math.round(PROCESSING_SIZE_LIMIT / 1024 / 1024);
+      console.log(`Video too large: ${sizeMB}MB exceeds ${limitMB}MB limit`);
+      return res.status(413).json({
+        error: `Video too large for processing: ${sizeMB}MB exceeds ${limitMB}MB limit. Please use "This is already a timelapse" option or compress your video first.`,
+        sizeMB,
+        limitMB
+      });
+    }
+
+    console.log(`Video size OK: ${Math.round(contentLength / 1024 / 1024)}MB`);
+
     // Download video from URL
     console.log('Downloading video from URL...');
     inputPath = await downloadFromUrl(videoUrl);
 
+    // Get video metadata
+    console.log('Analyzing video metadata...');
+    const metadata = await getVideoMetadata(inputPath);
+    const durationMinutes = metadata.duration / 60;
+
+    console.log(`Video metadata: ${Math.round(durationMinutes)} minutes, ${metadata.fps.toFixed(2)} fps, ${metadata.width}x${metadata.height}`);
+
+    // Calculate optimal sampling rate based on duration
+    const { samplingFps, speedMultiplier } = calculateSamplingRate(durationMinutes);
+    const estimatedOutputDuration = calculateOutputDuration(metadata.duration, samplingFps);
+
+    console.log(`Using sampling rate: ${samplingFps} fps (${speedMultiplier}x speed)`);
+    console.log(`Estimated output: ${estimatedOutputDuration} seconds`);
+
     // Process video with frame sampling
     outputPath = path.join(TMP_DIR, `output-${Date.now()}.mp4`);
-    console.log('Processing video with FFmpeg (frame sampling)...');
+    console.log('Processing video with FFmpeg (true timelapse)...');
     await processVideo(inputPath, outputPath, samplingFps, timelapseId);
 
-    // Read processed video as base64 for worker upload
-    console.log('Reading processed video...');
-    const videoBuffer = fs.readFileSync(outputPath);
-    const videoBase64 = videoBuffer.toString('base64');
+    // Stream upload to R2 (no base64 encoding)
+    console.log('Streaming processed video to R2...');
+    const processedVideoKey = await uploadVideoToR2(outputPath, 'timelapses');
 
     // Cleanup temp files
     fs.unlinkSync(inputPath);
     fs.unlinkSync(outputPath);
 
-    console.log('Successfully processed timelapse, returning to worker for R2 upload');
+    console.log('Successfully processed timelapse and uploaded to R2');
 
     res.json({
       success: true,
-      videoBase64,
+      processedVideoKey,
       samplingFps,
+      speedMultiplier,
+      estimatedOutputDuration,
+      sourceMetadata: {
+        duration: metadata.duration,
+        fps: metadata.fps,
+        width: metadata.width,
+        height: metadata.height
+      }
     });
   } catch (error) {
     console.error('Processing error:', error);
