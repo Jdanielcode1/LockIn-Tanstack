@@ -23,6 +23,8 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const [copied, setCopied] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
+  const meetingRef = useRef(meeting)
+  const openaiConnectionRef = useRef(openaiConnection)
 
   // Fetch session details
   const { data: session } = useSuspenseQuery(
@@ -265,6 +267,26 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     if (!user) return
 
     try {
+      // Clean up RealtimeKit meeting connection and stop all media tracks
+      if (meeting) {
+        // Stop all local media tracks (camera and microphone)
+        if (meeting.peer) {
+          meeting.peer.getSenders().forEach(sender => {
+            if (sender.track) {
+              sender.track.stop()
+            }
+          })
+        }
+        await meeting.leave()
+      }
+
+      // Clean up OpenAI connection if active
+      if (openaiConnection) {
+        openaiConnection.close()
+        setOpenaiConnection(null)
+        setAiAgentConnected(false)
+      }
+
       await leaveMutation({
         sessionId,
         userId: user.userId,
@@ -280,9 +302,28 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     if (!user || !confirm('Are you sure you want to end this session for everyone?')) return
 
     try {
+      // Clean up RealtimeKit meeting connection and stop all media tracks
+      if (meeting) {
+        // Stop all local media tracks (camera and microphone)
+        if (meeting.peer) {
+          meeting.peer.getSenders().forEach(sender => {
+            if (sender.track) {
+              sender.track.stop()
+            }
+          })
+        }
+        await meeting.leave()
+      }
+
+      // Clean up OpenAI connection if active
+      if (openaiConnection) {
+        openaiConnection.close()
+        setOpenaiConnection(null)
+        setAiAgentConnected(false)
+      }
+
       await endMutation({
         sessionId,
-        userId: user.userId,
       })
       onClose()
     } catch (error) {
@@ -360,6 +401,40 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
 
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
+  // Keep refs updated with current values
+  useEffect(() => {
+    meetingRef.current = meeting
+  }, [meeting])
+
+  useEffect(() => {
+    openaiConnectionRef.current = openaiConnection
+  }, [openaiConnection])
+
+  // Cleanup RealtimeKit and OpenAI connections when component unmounts
+  useEffect(() => {
+    return () => {
+      // Cleanup RealtimeKit meeting using ref (captures latest value)
+      if (meetingRef.current) {
+        // Stop all local media tracks (camera and microphone)
+        if (meetingRef.current.peer) {
+          meetingRef.current.peer.getSenders().forEach(sender => {
+            if (sender.track) {
+              sender.track.stop()
+            }
+          })
+        }
+        meetingRef.current.leave().catch((err) => {
+          console.error('Error leaving meeting on cleanup:', err)
+        })
+      }
+
+      // Cleanup OpenAI connection using ref (captures latest value)
+      if (openaiConnectionRef.current) {
+        openaiConnectionRef.current.close()
+      }
+    }
   }, [])
 
   if (!session) {
