@@ -293,6 +293,13 @@ function Feed() {
                           to="/projects/$projectId"
                           params={{ projectId: project._id }}
                           className="block p-2 rounded hover:bg-[#0d1117] transition group"
+                          onClick={() => {
+                            console.log('🔵 [Feed Sidebar] Project clicked:', {
+                              projectId: project._id,
+                              projectTitle: project.title,
+                              route: '/projects/$projectId'
+                            })
+                          }}
                         >
                           <div className="flex items-center justify-between mb-1">
                             <p className="text-sm text-[#c9d1d9] font-medium group-hover:text-[#58a6ff] transition line-clamp-1">
@@ -464,9 +471,17 @@ function Feed() {
                             </span>
                           </div>
                           <Link
-                            to="/timelapse/$timelapseId"
-                            params={{ timelapseId: timelapse._id }}
+                            to="/projects/$projectId"
+                            params={{ projectId: timelapse.projectId }}
                             className="text-[#c9d1d9] font-semibold hover:text-[#58a6ff] transition"
+                            onClick={() => {
+                              console.log('🟢 [Feed Main] Project title clicked:', {
+                                projectId: timelapse.projectId,
+                                projectTitle: timelapse.projectTitle,
+                                timelapseId: timelapse._id,
+                                route: '/projects/$projectId'
+                              })
+                            }}
                           >
                             {timelapse.projectTitle}
                           </Link>

@@ -36,12 +36,20 @@ export const Route = createFileRoute('/_authenticated/projects')({
 
 function ProjectsLayout() {
   const matches = useMatches()
-  const isDetailRoute = matches.some(match => match.routeId === '/projects/$projectId')
-  
+
+  console.log('🔍 [ProjectsLayout] Route matching debug:', {
+    allMatches: matches.map(m => ({ id: m.routeId, pathname: m.pathname })),
+    lookingFor: '/projects/$projectId'
+  })
+
+  const isDetailRoute = matches.some(match => match.routeId === '/_authenticated/projects/$projectId')
+
+  console.log('🔍 [ProjectsLayout] Is detail route?', isDetailRoute)
+
   if (isDetailRoute) {
     return <Outlet />
   }
-  
+
   return <ProjectsList />
 }
 
