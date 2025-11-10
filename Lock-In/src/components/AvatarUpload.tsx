@@ -87,8 +87,11 @@ export function AvatarUpload({ userId, currentAvatarKey, onUploadComplete }: Ava
       setProgress(70)
 
       // Update user record with new avatar key
-      await updateAvatar({ userId, avatarKey })
-      
+      await updateAvatar({
+        // userId removed - backend gets it from ctx.auth
+        avatarKey
+      })
+
       setProgress(100)
 
       // Clean up

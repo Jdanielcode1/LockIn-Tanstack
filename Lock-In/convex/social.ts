@@ -1,16 +1,17 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
+import { getAuthUserId } from "./authHelpers";
 
 export const toggleLike = mutation({
   args: {
-    userId: v.id("users"),
     timelapseId: v.id("timelapses"),
   },
   returns: v.object({
     liked: v.boolean(),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const timelapse = await ctx.db.get(args.timelapseId);
     if (!timelapse) {
       throw new Error("Timelapse not found");
@@ -19,8 +20,8 @@ export const toggleLike = mutation({
     // Check if user has already liked this timelapse
     const existingLike = await ctx.db
       .query("likes")
-      .withIndex("by_user_and_timelapse", (q) => 
-        q.eq("userId", args.userId).eq("timelapseId", args.timelapseId)
+      .withIndex("by_user_and_timelapse", (q) =>
+        q.eq("userId", userId).eq("timelapseId", args.timelapseId)
       )
       .first();
 
@@ -34,7 +35,7 @@ export const toggleLike = mutation({
     } else {
       // Like
       await ctx.db.insert("likes", {
-        userId: args.userId,
+        userId: userId,
         timelapseId: args.timelapseId,
         createdAt: Date.now(),
       });
@@ -48,7 +49,6 @@ export const toggleLike = mutation({
 
 export const addComment = mutation({
   args: {
-    userId: v.id("users"),
     timelapseId: v.id("timelapses"),
     content: v.string(),
   },
@@ -56,8 +56,9 @@ export const addComment = mutation({
     commentId: v.id("comments"),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const commentId = await ctx.db.insert("comments", {
-      userId: args.userId,
+      userId: userId,
       timelapseId: args.timelapseId,
       content: args.content,
       createdAt: Date.now(),

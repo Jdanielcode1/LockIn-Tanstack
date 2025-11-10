@@ -53,7 +53,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const hasAttemptedJoin = useRef(false)
 
   useEffect(() => {
-    const isCreator = user?.userId === session?.creatorId
+    const isCreator = user?._id === session?.creatorId
     const isActiveSession = session?.status === 'active'
     const hasMeetingId = !!session?.realtimeKitMeetingId
 
@@ -66,8 +66,8 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
         try {
           console.log('Auto-joining active session as invited participant')
           const result = await addParticipantAction({
+            // userId removed - backend gets it from ctx.auth
             sessionId,
-            userId: user.userId,
           })
 
           if (result.success && result.authToken) {
@@ -95,7 +95,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   useEffect(() => {
     if (session?.status !== 'active' || meeting) return
 
-    const isCreator = user?.userId === session?.creatorId
+    const isCreator = user?._id === session?.creatorId
     const authToken = isCreator ? session.realtimeKitAuthToken : participantAuthToken
 
     if (authToken) {
@@ -108,7 +108,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
         },
       })
     }
-  }, [session?.status, session?.realtimeKitAuthToken, session?.creatorId, user?.userId, participantAuthToken, meeting, initMeeting])
+  }, [session?.status, session?.realtimeKitAuthToken, session?.creatorId, user?._id, participantAuthToken, meeting, initMeeting])
 
   // Initialize OpenAI Realtime API when AI agent is enabled and session is active
   useEffect(() => {
@@ -289,8 +289,8 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
       }
 
       await leaveMutation({
+        // userId removed - backend gets it from ctx.auth
         sessionId,
-        userId: user.userId,
       })
       onClose()
     } catch (error) {
@@ -324,6 +324,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
       }
 
       await endMutation({
+        // userId removed - backend gets it from ctx.auth
         sessionId,
       })
       onClose()
@@ -339,8 +340,8 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     setIsStarting(true)
     try {
       const result = await initializeMeetingAction({
+        // userId removed - backend gets it from ctx.auth
         sessionId,
-        userId: user.userId,
       })
 
       if (!result.success) {
@@ -649,7 +650,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     )
   }
 
-  const isCreator = user?.userId === session.creatorId
+  const isCreator = user?._id === session.creatorId
   const sessionDate = new Date(session.scheduledStartTime)
   const isActive = session.status === 'active'
 

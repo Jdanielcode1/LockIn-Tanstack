@@ -2,10 +2,10 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { r2 } from "./r2";
+import { getAuthUserId } from "./authHelpers";
 
 export const create = mutation({
   args: {
-    userId: v.id("users"),
     projectId: v.id("projects"),
     videoKey: v.string(),
     thumbnailKey: v.optional(v.string()),
@@ -21,8 +21,9 @@ export const create = mutation({
     timelapseId: v.id("timelapses"),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const timelapseId = await ctx.db.insert("timelapses", {
-      userId: args.userId,
+      userId: userId,
       projectId: args.projectId,
       videoKey: args.videoKey,
       originalVideoKey: args.requestProcessing ? args.videoKey : undefined,

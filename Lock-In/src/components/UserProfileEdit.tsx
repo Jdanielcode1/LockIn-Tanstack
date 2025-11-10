@@ -85,12 +85,15 @@ export function UserProfileEdit({ userId, onClose }: UserProfileEditProps) {
       // Upload avatar if a new one was selected
       if (selectedAvatarFile) {
         const avatarKey = await uploadFile(selectedAvatarFile)
-        await updateAvatar({ userId, avatarKey })
+        await updateAvatar({
+          // userId removed - backend gets it from ctx.auth
+          avatarKey
+        })
       }
 
       // Update profile fields
       await updateProfile({
-        userId,
+        // userId removed - backend gets it from ctx.auth
         displayName: displayName.trim(),
         bio: bio.trim() || undefined,
         email: email.trim() || undefined,

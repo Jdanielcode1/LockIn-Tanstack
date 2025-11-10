@@ -8,7 +8,7 @@ import type { Id } from '../../convex/_generated/dataModel'
 import { useUser } from '../components/UserProvider'
 import { CreateChallengeModal } from '../components/CreateChallengeModal'
 
-export const Route = createFileRoute('/challenges')({
+export const Route = createFileRoute('/_authenticated/challenges')({
   component: ChallengesLayout,
 })
 
@@ -43,7 +43,10 @@ function ChallengesList() {
     }
 
     try {
-      await joinMutation({ challengeId, userId: user.userId })
+      await joinMutation({
+        // userId removed - backend gets it from ctx.auth
+        challengeId
+      })
     } catch (error) {
       console.error('Error joining challenge:', error)
       alert('Failed to join challenge')
@@ -54,7 +57,10 @@ function ChallengesList() {
     if (!user) return
 
     try {
-      await leaveMutation({ challengeId, userId: user.userId })
+      await leaveMutation({
+        // userId removed - backend gets it from ctx.auth
+        challengeId
+      })
     } catch (error) {
       console.error('Error leaving challenge:', error)
       alert('Failed to leave challenge')

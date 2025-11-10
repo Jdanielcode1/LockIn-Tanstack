@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { getAuthUserId } from "./authHelpers";
 
 // List public clubs
 export const list = query({
@@ -87,7 +88,7 @@ export const getMembers = query({
   returns: v.array(
     v.object({
       _id: v.id("users"),
-      displayName: v.string(),
+      displayName: v.optional(v.string()),
       avatarKey: v.optional(v.string()),
       bio: v.optional(v.string()),
       location: v.optional(v.string()),
@@ -145,17 +146,17 @@ export const isMember = query({
 export const join = mutation({
   args: {
     clubId: v.id("clubs"),
-    userId: v.id("users"),
   },
   returns: v.object({
     success: v.boolean(),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     // Check if already a member
     const existing = await ctx.db
       .query("clubMembers")
       .withIndex("by_club_and_user", (q) =>
-        q.eq("clubId", args.clubId).eq("userId", args.userId)
+        q.eq("clubId", args.clubId).eq("userId", userId)
       )
       .first();
 
@@ -166,7 +167,7 @@ export const join = mutation({
     // Add member
     await ctx.db.insert("clubMembers", {
       clubId: args.clubId,
-      userId: args.userId,
+      userId: userId,
       role: "member",
       joinedAt: Date.now(),
     });
@@ -187,16 +188,16 @@ export const join = mutation({
 export const leave = mutation({
   args: {
     clubId: v.id("clubs"),
-    userId: v.id("users"),
   },
   returns: v.object({
     success: v.boolean(),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const membership = await ctx.db
       .query("clubMembers")
       .withIndex("by_club_and_user", (q) =>
-        q.eq("clubId", args.clubId).eq("userId", args.userId)
+        q.eq("clubId", args.clubId).eq("userId", userId)
       )
       .first();
 
@@ -392,7 +393,7 @@ export const getLeaderboard = query({
   returns: v.array(
     v.object({
       _id: v.id("users"),
-      displayName: v.string(),
+      displayName: v.optional(v.string()),
       avatarKey: v.optional(v.string()),
       totalHours: v.number(),
       timelapseCount: v.number(),
@@ -480,18 +481,18 @@ export const create = mutation({
       v.literal("fitness"),
       v.literal("general")
     ),
-    creatorId: v.id("users"),
     isPublic: v.boolean(),
   },
   returns: v.object({
     clubId: v.id("clubs"),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const clubId = await ctx.db.insert("clubs", {
       name: args.name,
       description: args.description,
       type: args.type,
-      creatorId: args.creatorId,
+      creatorId: userId,
       memberCount: 1, // Creator is first member
       isPublic: args.isPublic,
       createdAt: Date.now(),
@@ -500,7 +501,7 @@ export const create = mutation({
     // Add creator as admin member
     await ctx.db.insert("clubMembers", {
       clubId,
-      userId: args.creatorId,
+      userId: userId,
       role: "admin",
       joinedAt: Date.now(),
     });

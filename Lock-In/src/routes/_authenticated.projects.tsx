@@ -9,7 +9,7 @@ import { Avatar } from '../components/Avatar'
 import { UserProfileEdit } from '../components/UserProfileEdit'
 import { useUser } from '../components/UserProvider'
 
-export const Route = createFileRoute('/projects')({
+export const Route = createFileRoute('/_authenticated/projects')({
   loader: async (opts) => {
     const currentYear = new Date().getFullYear()
     
@@ -54,7 +54,7 @@ function ProjectsList() {
 
   const { data: profileData } = useQuery({
     ...convexQuery(api.users.getUser, {
-      userId: user?.userId!,
+      userId: user?._id!,
     }),
     enabled: !!user,
   })
@@ -80,21 +80,21 @@ function ProjectsList() {
   // Fetch follower/following counts and challenges
   const { data: followerCount } = useQuery({
     ...convexQuery(api.follows.getFollowerCount, {
-      userId: user?.userId!,
+      userId: user?._id!,
     }),
     enabled: !!user,
   })
 
   const { data: followingCount } = useQuery({
     ...convexQuery(api.follows.getFollowingCount, {
-      userId: user?.userId!,
+      userId: user?._id!,
     }),
     enabled: !!user,
   })
 
   const { data: userChallenges } = useQuery({
     ...convexQuery(api.challenges.getUserChallenges, {
-      userId: user?.userId!,
+      userId: user?._id!,
     }),
     enabled: !!user,
   })
@@ -102,7 +102,7 @@ function ProjectsList() {
   // Fetch user achievements
   const { data: achievements } = useQuery({
     ...convexQuery(api.achievements.getUserAchievements, {
-      userId: user?.userId!,
+      userId: user?._id!,
     }),
     enabled: !!user,
   })
@@ -396,7 +396,7 @@ function ProjectsList() {
 
         {showEditProfile && user && (
           <UserProfileEdit
-            userId={user.userId}
+            userId={user._id}
             onClose={() => {
               setShowEditProfile(false)
               // Refresh will happen automatically via Convex reactivity

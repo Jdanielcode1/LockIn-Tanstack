@@ -4,15 +4,48 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  useRouteContext,
 } from '@tanstack/react-router'
 import * as React from 'react'
 import type { QueryClient } from '@tanstack/react-query'
+import type { ConvexQueryClient } from '@convex-dev/react-query'
+import { ConvexReactClient } from 'convex/react'
+import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react'
+import { fetchSession, getCookieName } from '@convex-dev/better-auth/react-start'
+import { createServerFn } from '@tanstack/react-start'
+import { getCookie, getRequest } from '@tanstack/react-start/server'
 import appCss from '~/styles/app.css?url'
 import { UserProvider } from '../components/UserProvider'
+import { authClient } from '../lib/auth-client'
+
+// Get auth information for SSR using available cookies
+const fetchAuth = createServerFn({ method: 'GET' }).handler(async () => {
+  const { createAuth } = await import('../../convex/auth')
+  const { session } = await fetchSession(getRequest())
+  const sessionCookieName = getCookieName(createAuth)
+  const token = getCookie(sessionCookieName)
+  return {
+    userId: session?.user.id,
+    token,
+  }
+})
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
+  convexQueryClient: ConvexQueryClient
+  convexClient: ConvexReactClient
 }>()({
+  beforeLoad: async (ctx) => {
+    // All queries, mutations and actions made with TanStack Query will be
+    // authenticated by an identity token.
+    const { userId, token } = await fetchAuth()
+    // During SSR only (the only time serverHttpClient exists),
+    // set the auth token to make HTTP queries with.
+    if (token) {
+      ctx.context.convexQueryClient.serverHttpClient?.setAuth(token)
+    }
+    return { userId, token }
+  },
   head: () => ({
     meta: [
       {
@@ -54,61 +87,68 @@ export const Route = createRootRouteWithContext<{
 })
 
 function RootComponent() {
+  const context = useRouteContext({ from: Route.id })
+
   return (
-    <RootDocument>
-      <UserProvider>
-        <nav className="bg-[#161b22] border-b border-[#30363d] text-[#c9d1d9]">
-          <div className="container mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <Link to="/" className="text-base font-semibold hover:text-white transition flex items-center gap-2">
-                <span className="text-xl">📹</span>
-                Lock-In
-              </Link>
-              <div className="flex gap-6">
-                <Link
-                  to="/"
-                  className="hover:text-white transition text-sm"
-                  activeProps={{ className: 'text-white font-semibold' }}
-                >
-                  Feed
+    <ConvexBetterAuthProvider
+      client={context.convexClient}
+      authClient={authClient}
+    >
+      <RootDocument>
+        <UserProvider>
+          <nav className="bg-[#161b22] border-b border-[#30363d] text-[#c9d1d9]">
+            <div className="container mx-auto px-4 py-3">
+              <div className="flex items-center justify-between">
+                <Link to="/" className="text-base font-semibold hover:text-white transition flex items-center gap-2">
+                  <span className="text-xl">📹</span>
+                  Lock-In
                 </Link>
-                <Link
-                  to="/leaderboard"
-                  className="hover:text-white transition text-sm"
-                  activeProps={{ className: 'text-white font-semibold' }}
-                >
-                  Leaderboard
-                </Link>
-                <Link
-                  to="/challenges"
-                  className="hover:text-white transition text-sm"
-                  activeProps={{ className: 'text-white font-semibold' }}
-                >
-                  Challenges
-                </Link>
-                <Link
-                  to="/projects"
-                  className="hover:text-white transition text-sm"
-                  activeProps={{ className: 'text-white font-semibold' }}
-                >
-                  Profile
-                </Link>
+                <div className="flex gap-6">
+                  <Link
+                    to="/"
+                    className="hover:text-white transition text-sm"
+                    activeProps={{ className: 'text-white font-semibold' }}
+                  >
+                    Feed
+                  </Link>
+                  <Link
+                    to="/leaderboard"
+                    className="hover:text-white transition text-sm"
+                    activeProps={{ className: 'text-white font-semibold' }}
+                  >
+                    Leaderboard
+                  </Link>
+                  <Link
+                    to="/challenges"
+                    className="hover:text-white transition text-sm"
+                    activeProps={{ className: 'text-white font-semibold' }}
+                  >
+                    Challenges
+                  </Link>
+                  <Link
+                    to="/projects"
+                    className="hover:text-white transition text-sm"
+                    activeProps={{ className: 'text-white font-semibold' }}
+                  >
+                    Profile
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
-        </nav>
-        <React.Suspense fallback={
-          <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-            <div className="text-[#8b949e] text-center">
-              <div className="animate-spin text-4xl mb-4">⏳</div>
-              <p>Loading...</p>
+          </nav>
+          <React.Suspense fallback={
+            <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
+              <div className="text-[#8b949e] text-center">
+                <div className="animate-spin text-4xl mb-4">⏳</div>
+                <p>Loading...</p>
+              </div>
             </div>
-          </div>
-        }>
-          <Outlet />
-        </React.Suspense>
-      </UserProvider>
-    </RootDocument>
+          }>
+            <Outlet />
+          </React.Suspense>
+        </UserProvider>
+      </RootDocument>
+    </ConvexBetterAuthProvider>
   )
 }
 

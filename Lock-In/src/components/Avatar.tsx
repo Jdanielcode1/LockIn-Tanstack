@@ -4,7 +4,7 @@ import { api } from '../../convex/_generated/api'
 
 interface AvatarProps {
   avatarKey?: string
-  displayName: string
+  displayName?: string
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   className?: string
 }
@@ -17,7 +17,7 @@ const sizeClasses = {
   xl: 'w-24 h-24 text-4xl',
 }
 
-export function Avatar({ avatarKey, displayName, size = 'md', className = '' }: AvatarProps) {
+export function Avatar({ avatarKey, displayName = 'User', size = 'md', className = '' }: AvatarProps) {
   const initials = displayName
     .split(' ')
     .map(word => word[0])
@@ -34,7 +34,7 @@ export function Avatar({ avatarKey, displayName, size = 'md', className = '' }: 
     'from-yellow-500 to-red-600',
     'from-teal-500 to-cyan-600',
   ]
-  
+
   const colorIndex = displayName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length
   const gradient = colors[colorIndex]
 

@@ -91,7 +91,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
         }
 
         // Generate unique uploader ID based on user and timestamp
-        const uploaderId = `${user.userId}-${Date.now()}`
+        const uploaderId = `${user._id}-${Date.now()}`
 
         setUploadStatus('Uploading file in chunks...')
         const result = await uploadLargeFile(
@@ -140,7 +140,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
       // Create timelapse record in database
       const shouldProcess = makeTimelapse && !isAlreadyTimelapse
       const { timelapseId } = await createTimelapse({
-        userId: user.userId,
+        // userId removed - backend gets it from ctx.auth
         projectId,
         videoKey,
         durationMinutes: parseFloat(durationMinutes),

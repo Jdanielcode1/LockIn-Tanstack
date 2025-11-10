@@ -24,7 +24,7 @@ export function CreateProjectModal({ onClose }: CreateProjectModalProps) {
 
     try {
       await createProject({
-        userId: user.userId,
+        // userId removed - backend gets it from ctx.auth
         title,
         description,
         targetHours: parseFloat(targetHours),

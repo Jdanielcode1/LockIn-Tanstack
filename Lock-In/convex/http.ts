@@ -1,10 +1,13 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
+import { authComponent, createAuth } from "./auth";
 
 const http = httpRouter();
+
+// Register Better Auth HTTP routes
+authComponent.registerRoutes(http, createAuth);
 
 // HTTP endpoint for external services to update processing status
 http.route({

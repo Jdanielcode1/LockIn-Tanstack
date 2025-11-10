@@ -1,22 +1,23 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { api } from "./_generated/api";
+import { getAuthUserId } from "./authHelpers";
 
 // Follow a user
 export const follow = mutation({
   args: {
-    followerId: v.id("users"),
     followingId: v.id("users"),
   },
   returns: v.object({
     success: v.boolean(),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     // Check if already following
     const existing = await ctx.db
       .query("follows")
       .withIndex("by_follower_and_following", (q) =>
-        q.eq("followerId", args.followerId).eq("followingId", args.followingId)
+        q.eq("followerId", userId).eq("followingId", args.followingId)
       )
       .first();
 
@@ -26,7 +27,7 @@ export const follow = mutation({
 
     // Create follow relationship
     await ctx.db.insert("follows", {
-      followerId: args.followerId,
+      followerId: userId,
       followingId: args.followingId,
       createdAt: Date.now(),
     });
@@ -38,17 +39,17 @@ export const follow = mutation({
 // Unfollow a user
 export const unfollow = mutation({
   args: {
-    followerId: v.id("users"),
     followingId: v.id("users"),
   },
   returns: v.object({
     success: v.boolean(),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const existing = await ctx.db
       .query("follows")
       .withIndex("by_follower_and_following", (q) =>
-        q.eq("followerId", args.followerId).eq("followingId", args.followingId)
+        q.eq("followerId", userId).eq("followingId", args.followingId)
       )
       .first();
 
@@ -121,8 +122,8 @@ export const getSuggestedUsers = query({
   returns: v.array(
     v.object({
       _id: v.id("users"),
-      username: v.string(),
-      displayName: v.string(),
+      username: v.optional(v.string()),
+      displayName: v.optional(v.string()),
       avatarKey: v.optional(v.string()),
       location: v.optional(v.string()),
       mutualFollowersCount: v.number(),

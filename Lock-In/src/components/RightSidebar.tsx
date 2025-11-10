@@ -25,7 +25,7 @@ export function RightSidebar() {
   // Fetch suggested friends (only if user is logged in)
   const { data: suggestedFriends } = useQuery({
     ...convexQuery(api.follows.getSuggestedUsers, {
-      userId: user?.userId!,
+      userId: user?._id!,
       limit: 3,
     }),
     enabled: !!user,
@@ -43,7 +43,7 @@ export function RightSidebar() {
 
     try {
       await followMutation({
-        followerId: user.userId,
+        // followerId removed - backend gets it from ctx.auth
         followingId: userId,
       })
     } catch (error) {
@@ -59,8 +59,8 @@ export function RightSidebar() {
 
     try {
       await joinChallengeMutation({
+        // userId removed - backend gets it from ctx.auth
         challengeId,
-        userId: user.userId,
       })
     } catch (error) {
       console.error('Error joining challenge:', error)
@@ -75,8 +75,8 @@ export function RightSidebar() {
 
     try {
       await joinClubMutation({
+        // userId removed - backend gets it from ctx.auth
         clubId,
-        userId: user.userId,
       })
     } catch (error) {
       console.error('Error joining club:', error)

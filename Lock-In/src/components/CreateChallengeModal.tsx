@@ -46,7 +46,7 @@ export function CreateChallengeModal({ onClose, clubId, clubName }: CreateChalle
     setSubmitting(true)
     try {
       await createChallenge({
-        creatorId: user.userId,
+        // creatorId removed - backend gets it from ctx.auth
         clubId: clubId || undefined, // Include clubId if provided
         title: title.trim(),
         description: description.trim(),

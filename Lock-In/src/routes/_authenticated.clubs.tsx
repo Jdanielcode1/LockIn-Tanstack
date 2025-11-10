@@ -8,7 +8,7 @@ import type { Id } from '../../convex/_generated/dataModel'
 import { useUser } from '../components/UserProvider'
 import { CreateClubModal } from '../components/CreateClubModal'
 
-export const Route = createFileRoute('/clubs')({
+export const Route = createFileRoute('/_authenticated/clubs')({
   component: ClubsLayout,
 })
 
@@ -43,7 +43,10 @@ function ClubsList() {
     }
 
     try {
-      await joinMutation({ clubId, userId: user.userId })
+      await joinMutation({
+        // userId removed - backend gets it from ctx.auth
+        clubId
+      })
     } catch (error) {
       console.error('Error joining club:', error)
       alert('Failed to join club')
@@ -54,7 +57,10 @@ function ClubsList() {
     if (!user) return
 
     try {
-      await leaveMutation({ clubId, userId: user.userId })
+      await leaveMutation({
+        // userId removed - backend gets it from ctx.auth
+        clubId
+      })
     } catch (error) {
       console.error('Error leaving club:', error)
       alert('Failed to leave club')

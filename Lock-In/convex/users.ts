@@ -1,11 +1,16 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getAuthUserId, getAuthUserIdOrNull } from "./authHelpers";
+import type { Id } from "./_generated/dataModel";
 
-export const createUser = mutation({
+/**
+ * Update the authenticated user's profile with username and other details.
+ * Called after initial sign-up to complete the user profile.
+ */
+export const setupProfile = mutation({
   args: {
     username: v.string(),
     displayName: v.string(),
-    email: v.optional(v.string()),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
   },
@@ -13,13 +18,15 @@ export const createUser = mutation({
     userId: v.id("users"),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+
     // Check if username already exists
     const existing = await ctx.db
       .query("users")
       .withIndex("by_username", (q) => q.eq("username", args.username))
       .first();
 
-    if (existing) {
+    if (existing && existing._id !== userId) {
       throw new Error("Username already taken");
     }
 
@@ -36,17 +43,33 @@ export const createUser = mutation({
       throw new Error("Display name must be 1-50 characters");
     }
 
-    const userId = await ctx.db.insert("users", {
+    await ctx.db.patch(userId, {
       username: args.username,
       displayName: args.displayName,
-      email: args.email,
       bio: args.bio,
       location: args.location,
-      avatarKey: undefined,
       createdAt: Date.now(),
     });
 
     return { userId };
+  },
+});
+
+/**
+ * Get the current authenticated user's data
+ */
+export const getCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserIdOrNull(ctx);
+    console.log('[getCurrentUser] userId from auth:', userId);
+    if (!userId) {
+      console.log('[getCurrentUser] No auth identity, returning null');
+      return null;
+    }
+    const user = await ctx.db.get(userId);
+    console.log('[getCurrentUser] Found user:', user);
+    return user;
   },
 });
 
@@ -58,13 +81,13 @@ export const getUser = query({
     v.object({
       _id: v.id("users"),
       _creationTime: v.number(),
-      username: v.string(),
-      displayName: v.string(),
+      username: v.optional(v.string()),
+      displayName: v.optional(v.string()),
       email: v.optional(v.string()),
       bio: v.optional(v.string()),
       avatarKey: v.optional(v.string()),
       location: v.optional(v.string()),
-      createdAt: v.number(),
+      createdAt: v.optional(v.number()),
     }),
     v.null()
   ),
@@ -81,13 +104,13 @@ export const getUserByUsername = query({
     v.object({
       _id: v.id("users"),
       _creationTime: v.number(),
-      username: v.string(),
-      displayName: v.string(),
+      username: v.optional(v.string()),
+      displayName: v.optional(v.string()),
       email: v.optional(v.string()),
       bio: v.optional(v.string()),
       avatarKey: v.optional(v.string()),
       location: v.optional(v.string()),
-      createdAt: v.number(),
+      createdAt: v.optional(v.number()),
     }),
     v.null()
   ),
@@ -101,7 +124,6 @@ export const getUserByUsername = query({
 
 export const updateProfile = mutation({
   args: {
-    userId: v.id("users"),
     displayName: v.optional(v.string()),
     bio: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -109,10 +131,7 @@ export const updateProfile = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
+    const userId = await getAuthUserId(ctx);
 
     const updates: any = {};
 
@@ -135,24 +154,20 @@ export const updateProfile = mutation({
       updates.location = args.location;
     }
 
-    await ctx.db.patch(args.userId, updates);
+    await ctx.db.patch(userId, updates);
     return null;
   },
 });
 
 export const updateAvatar = mutation({
   args: {
-    userId: v.id("users"),
     avatarKey: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
+    const userId = await getAuthUserId(ctx);
 
-    await ctx.db.patch(args.userId, {
+    await ctx.db.patch(userId, {
       avatarKey: args.avatarKey,
     });
 
@@ -168,19 +183,19 @@ export const searchUsers = query({
     v.object({
       _id: v.id("users"),
       _creationTime: v.number(),
-      username: v.string(),
-      displayName: v.string(),
+      username: v.optional(v.string()),
+      displayName: v.optional(v.string()),
       avatarKey: v.optional(v.string()),
     })
   ),
   handler: async (ctx, args) => {
     const allUsers = await ctx.db.query("users").collect();
-    
+
     const searchLower = args.searchTerm.toLowerCase();
     const filtered = allUsers.filter(
       (user) =>
-        user.username.toLowerCase().includes(searchLower) ||
-        user.displayName.toLowerCase().includes(searchLower)
+        user.username?.toLowerCase().includes(searchLower) ||
+        user.displayName?.toLowerCase().includes(searchLower)
     );
 
     return filtered.slice(0, 10).map((user) => ({

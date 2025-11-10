@@ -1,10 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
+import { getAuthUserId } from "./authHelpers";
 
 export const create = mutation({
   args: {
-    userId: v.id("users"),
     projectId: v.optional(v.id("projects")),
     title: v.string(),
     description: v.string(),
@@ -21,8 +21,9 @@ export const create = mutation({
     sessionId: v.id("lockInSessions"),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const sessionId = await ctx.db.insert("lockInSessions", {
-      creatorId: args.userId,
+      creatorId: userId,
       projectId: args.projectId,
       title: args.title,
       description: args.description,
@@ -37,7 +38,7 @@ export const create = mutation({
     // Creator is automatically a participant and moderator
     await ctx.db.insert("sessionParticipants", {
       sessionId,
-      userId: args.userId,
+      userId: userId,
       joinedAt: Date.now(),
       isActive: false, // Not active until they actually join the meeting
       isModerator: true,
@@ -72,7 +73,6 @@ export const start = mutation({
 export const join = mutation({
   args: {
     sessionId: v.id("lockInSessions"),
-    userId: v.id("users"),
   },
   returns: v.object({
     success: v.boolean(),
@@ -81,6 +81,7 @@ export const join = mutation({
     error: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const session = await ctx.db.get(args.sessionId);
     if (!session) {
       return { success: false, error: "Session not found" };
@@ -94,7 +95,7 @@ export const join = mutation({
     const existingParticipant = await ctx.db
       .query("sessionParticipants")
       .withIndex("by_session_and_user", (q) =>
-        q.eq("sessionId", args.sessionId).eq("userId", args.userId)
+        q.eq("sessionId", args.sessionId).eq("userId", userId)
       )
       .first();
 
@@ -113,7 +114,7 @@ export const join = mutation({
       // Add as new participant
       await ctx.db.insert("sessionParticipants", {
         sessionId: args.sessionId,
-        userId: args.userId,
+        userId: userId,
         joinedAt: Date.now(),
         isActive: true,
         isModerator: false,
@@ -137,14 +138,14 @@ export const join = mutation({
 export const leave = mutation({
   args: {
     sessionId: v.id("lockInSessions"),
-    userId: v.id("users"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const participant = await ctx.db
       .query("sessionParticipants")
       .withIndex("by_session_and_user", (q) =>
-        q.eq("sessionId", args.sessionId).eq("userId", args.userId)
+        q.eq("sessionId", args.sessionId).eq("userId", userId)
       )
       .first();
 
@@ -225,8 +226,8 @@ export const get = query({
       ),
       createdAt: v.number(),
       creator: v.object({
-        username: v.string(),
-        displayName: v.string(),
+        username: v.optional(v.string()),
+        displayName: v.optional(v.string()),
         avatarKey: v.optional(v.string()),
       }),
       projectTitle: v.optional(v.string()),
@@ -285,8 +286,8 @@ export const listActive = query({
       ),
       createdAt: v.number(),
       creator: v.object({
-        username: v.string(),
-        displayName: v.string(),
+        username: v.optional(v.string()),
+        displayName: v.optional(v.string()),
         avatarKey: v.optional(v.string()),
       }),
       participantCount: v.number(),
@@ -349,8 +350,8 @@ export const listUpcoming = query({
       ),
       createdAt: v.number(),
       creator: v.object({
-        username: v.string(),
-        displayName: v.string(),
+        username: v.optional(v.string()),
+        displayName: v.optional(v.string()),
         avatarKey: v.optional(v.string()),
       }),
     })
@@ -398,8 +399,8 @@ export const getParticipants = query({
       isActive: v.boolean(),
       isModerator: v.boolean(),
       user: v.object({
-        username: v.string(),
-        displayName: v.string(),
+        username: v.optional(v.string()),
+        displayName: v.optional(v.string()),
         avatarKey: v.optional(v.string()),
       }),
     })

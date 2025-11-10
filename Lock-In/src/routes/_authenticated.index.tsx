@@ -14,7 +14,7 @@ import { useUser } from '../components/UserProvider'
 import { Avatar } from '../components/Avatar'
 import { RightSidebar } from '../components/RightSidebar'
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/_authenticated/')({
   loader: async (opts) => {
     await Promise.all([
       opts.context.queryClient.ensureQueryData(
@@ -56,7 +56,7 @@ function Feed() {
   // Fetch user profile data
   const { data: profileData } = useQuery({
     ...convexQuery(api.users.getUser, {
-      userId: user?.userId!,
+      userId: user?._id!,
     }),
     enabled: !!user,
   })
@@ -64,7 +64,7 @@ function Feed() {
   // Use regular useQuery for projects since it's conditional on user existing
   const { data: myProjectsData } = useQuery({
     ...convexQuery(api.projects.list, {
-      userId: user?.userId || ('' as any),
+      userId: user?._id || ('' as any),
       paginationOpts: { numItems: 4, cursor: null },
     }),
     enabled: !!user,
@@ -133,7 +133,7 @@ function Feed() {
     try {
       console.log('Calling toggleLike mutation...')
       const result = await toggleLikeMutation({
-        userId: user.userId,
+        // userId removed - backend gets it from ctx.auth
         timelapseId
       })
       console.log('Mutation result:', result)
@@ -184,7 +184,7 @@ function Feed() {
 
     try {
       await addCommentMutation({
-        userId: user.userId,
+        // userId removed - backend gets it from ctx.auth
         timelapseId,
         content: commentText
       })
@@ -598,7 +598,7 @@ function Feed() {
                                 return
                               }
                               await addCommentMutation({
-                                userId: user.userId,
+                                // userId removed - backend gets it from ctx.auth
                                 timelapseId: timelapse._id,
                                 content,
                               })

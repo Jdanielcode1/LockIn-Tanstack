@@ -9,292 +9,352 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ProjectsRouteImport } from './routes/projects'
-import { Route as LeaderboardRouteImport } from './routes/leaderboard'
-import { Route as ClubsRouteImport } from './routes/clubs'
-import { Route as ChallengesRouteImport } from './routes/challenges'
-import { Route as AnotherPageRouteImport } from './routes/anotherPage'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as TimelapseTimelapseIdRouteImport } from './routes/timelapse.$timelapseId'
-import { Route as SessionsSessionIdRouteImport } from './routes/sessions.$sessionId'
-import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
-import { Route as ClubsClubIdRouteImport } from './routes/clubs.$clubId'
-import { Route as ChallengesChallengeIdRouteImport } from './routes/challenges.$challengeId'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
+import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated.projects'
+import { Route as AuthenticatedLeaderboardRouteImport } from './routes/_authenticated.leaderboard'
+import { Route as AuthenticatedClubsRouteImport } from './routes/_authenticated.clubs'
+import { Route as AuthenticatedChallengesRouteImport } from './routes/_authenticated.challenges'
+import { Route as AuthenticatedAnotherPageRouteImport } from './routes/_authenticated.anotherPage'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AuthenticatedTimelapseTimelapseIdRouteImport } from './routes/_authenticated.timelapse.$timelapseId'
+import { Route as AuthenticatedSessionsSessionIdRouteImport } from './routes/_authenticated.sessions.$sessionId'
+import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated.projects.$projectId'
+import { Route as AuthenticatedClubsClubIdRouteImport } from './routes/_authenticated.clubs.$clubId'
+import { Route as AuthenticatedChallengesChallengeIdRouteImport } from './routes/_authenticated.challenges.$challengeId'
 
-const ProjectsRoute = ProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LeaderboardRoute = LeaderboardRouteImport.update({
-  id: '/leaderboard',
-  path: '/leaderboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClubsRoute = ClubsRouteImport.update({
-  id: '/clubs',
-  path: '/clubs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChallengesRoute = ChallengesRouteImport.update({
-  id: '/challenges',
-  path: '/challenges',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AnotherPageRoute = AnotherPageRouteImport.update({
-  id: '/anotherPage',
-  path: '/anotherPage',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndexRoute = IndexRouteImport.update({
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedLeaderboardRoute =
+  AuthenticatedLeaderboardRouteImport.update({
+    id: '/leaderboard',
+    path: '/leaderboard',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedClubsRoute = AuthenticatedClubsRouteImport.update({
+  id: '/clubs',
+  path: '/clubs',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedChallengesRoute = AuthenticatedChallengesRouteImport.update({
+  id: '/challenges',
+  path: '/challenges',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAnotherPageRoute =
+  AuthenticatedAnotherPageRouteImport.update({
+    id: '/anotherPage',
+    path: '/anotherPage',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TimelapseTimelapseIdRoute = TimelapseTimelapseIdRouteImport.update({
-  id: '/timelapse/$timelapseId',
-  path: '/timelapse/$timelapseId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SessionsSessionIdRoute = SessionsSessionIdRouteImport.update({
-  id: '/sessions/$sessionId',
-  path: '/sessions/$sessionId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
-  id: '/$projectId',
-  path: '/$projectId',
-  getParentRoute: () => ProjectsRoute,
-} as any)
-const ClubsClubIdRoute = ClubsClubIdRouteImport.update({
-  id: '/$clubId',
-  path: '/$clubId',
-  getParentRoute: () => ClubsRoute,
-} as any)
-const ChallengesChallengeIdRoute = ChallengesChallengeIdRouteImport.update({
-  id: '/$challengeId',
-  path: '/$challengeId',
-  getParentRoute: () => ChallengesRoute,
-} as any)
+const AuthenticatedTimelapseTimelapseIdRoute =
+  AuthenticatedTimelapseTimelapseIdRouteImport.update({
+    id: '/timelapse/$timelapseId',
+    path: '/timelapse/$timelapseId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSessionsSessionIdRoute =
+  AuthenticatedSessionsSessionIdRouteImport.update({
+    id: '/sessions/$sessionId',
+    path: '/sessions/$sessionId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsProjectIdRoute =
+  AuthenticatedProjectsProjectIdRouteImport.update({
+    id: '/$projectId',
+    path: '/$projectId',
+    getParentRoute: () => AuthenticatedProjectsRoute,
+  } as any)
+const AuthenticatedClubsClubIdRoute =
+  AuthenticatedClubsClubIdRouteImport.update({
+    id: '/$clubId',
+    path: '/$clubId',
+    getParentRoute: () => AuthenticatedClubsRoute,
+  } as any)
+const AuthenticatedChallengesChallengeIdRoute =
+  AuthenticatedChallengesChallengeIdRouteImport.update({
+    id: '/$challengeId',
+    path: '/$challengeId',
+    getParentRoute: () => AuthenticatedChallengesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/anotherPage': typeof AnotherPageRoute
-  '/challenges': typeof ChallengesRouteWithChildren
-  '/clubs': typeof ClubsRouteWithChildren
-  '/leaderboard': typeof LeaderboardRoute
-  '/projects': typeof ProjectsRouteWithChildren
-  '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
-  '/clubs/$clubId': typeof ClubsClubIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
-  '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
+  '/anotherPage': typeof AuthenticatedAnotherPageRoute
+  '/challenges': typeof AuthenticatedChallengesRouteWithChildren
+  '/clubs': typeof AuthenticatedClubsRouteWithChildren
+  '/leaderboard': typeof AuthenticatedLeaderboardRoute
+  '/projects': typeof AuthenticatedProjectsRouteWithChildren
+  '/': typeof AuthenticatedIndexRoute
+  '/challenges/$challengeId': typeof AuthenticatedChallengesChallengeIdRoute
+  '/clubs/$clubId': typeof AuthenticatedClubsClubIdRoute
+  '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
+  '/sessions/$sessionId': typeof AuthenticatedSessionsSessionIdRoute
+  '/timelapse/$timelapseId': typeof AuthenticatedTimelapseTimelapseIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/anotherPage': typeof AnotherPageRoute
-  '/challenges': typeof ChallengesRouteWithChildren
-  '/clubs': typeof ClubsRouteWithChildren
-  '/leaderboard': typeof LeaderboardRoute
-  '/projects': typeof ProjectsRouteWithChildren
-  '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
-  '/clubs/$clubId': typeof ClubsClubIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
-  '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
+  '/anotherPage': typeof AuthenticatedAnotherPageRoute
+  '/challenges': typeof AuthenticatedChallengesRouteWithChildren
+  '/clubs': typeof AuthenticatedClubsRouteWithChildren
+  '/leaderboard': typeof AuthenticatedLeaderboardRoute
+  '/projects': typeof AuthenticatedProjectsRouteWithChildren
+  '/': typeof AuthenticatedIndexRoute
+  '/challenges/$challengeId': typeof AuthenticatedChallengesChallengeIdRoute
+  '/clubs/$clubId': typeof AuthenticatedClubsClubIdRoute
+  '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
+  '/sessions/$sessionId': typeof AuthenticatedSessionsSessionIdRoute
+  '/timelapse/$timelapseId': typeof AuthenticatedTimelapseTimelapseIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/anotherPage': typeof AnotherPageRoute
-  '/challenges': typeof ChallengesRouteWithChildren
-  '/clubs': typeof ClubsRouteWithChildren
-  '/leaderboard': typeof LeaderboardRoute
-  '/projects': typeof ProjectsRouteWithChildren
-  '/challenges/$challengeId': typeof ChallengesChallengeIdRoute
-  '/clubs/$clubId': typeof ClubsClubIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
-  '/timelapse/$timelapseId': typeof TimelapseTimelapseIdRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/_authenticated/anotherPage': typeof AuthenticatedAnotherPageRoute
+  '/_authenticated/challenges': typeof AuthenticatedChallengesRouteWithChildren
+  '/_authenticated/clubs': typeof AuthenticatedClubsRouteWithChildren
+  '/_authenticated/leaderboard': typeof AuthenticatedLeaderboardRoute
+  '/_authenticated/projects': typeof AuthenticatedProjectsRouteWithChildren
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/challenges/$challengeId': typeof AuthenticatedChallengesChallengeIdRoute
+  '/_authenticated/clubs/$clubId': typeof AuthenticatedClubsClubIdRoute
+  '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
+  '/_authenticated/sessions/$sessionId': typeof AuthenticatedSessionsSessionIdRoute
+  '/_authenticated/timelapse/$timelapseId': typeof AuthenticatedTimelapseTimelapseIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
     | '/anotherPage'
     | '/challenges'
     | '/clubs'
     | '/leaderboard'
     | '/projects'
+    | '/'
     | '/challenges/$challengeId'
     | '/clubs/$clubId'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/timelapse/$timelapseId'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/anotherPage'
     | '/challenges'
     | '/clubs'
     | '/leaderboard'
     | '/projects'
+    | '/'
     | '/challenges/$challengeId'
     | '/clubs/$clubId'
     | '/projects/$projectId'
     | '/sessions/$sessionId'
     | '/timelapse/$timelapseId'
+    | '/api/auth/$'
   id:
     | '__root__'
-    | '/'
-    | '/anotherPage'
-    | '/challenges'
-    | '/clubs'
-    | '/leaderboard'
-    | '/projects'
-    | '/challenges/$challengeId'
-    | '/clubs/$clubId'
-    | '/projects/$projectId'
-    | '/sessions/$sessionId'
-    | '/timelapse/$timelapseId'
+    | '/_authenticated'
+    | '/_authenticated/anotherPage'
+    | '/_authenticated/challenges'
+    | '/_authenticated/clubs'
+    | '/_authenticated/leaderboard'
+    | '/_authenticated/projects'
+    | '/_authenticated/'
+    | '/_authenticated/challenges/$challengeId'
+    | '/_authenticated/clubs/$clubId'
+    | '/_authenticated/projects/$projectId'
+    | '/_authenticated/sessions/$sessionId'
+    | '/_authenticated/timelapse/$timelapseId'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AnotherPageRoute: typeof AnotherPageRoute
-  ChallengesRoute: typeof ChallengesRouteWithChildren
-  ClubsRoute: typeof ClubsRouteWithChildren
-  LeaderboardRoute: typeof LeaderboardRoute
-  ProjectsRoute: typeof ProjectsRouteWithChildren
-  SessionsSessionIdRoute: typeof SessionsSessionIdRoute
-  TimelapseTimelapseIdRoute: typeof TimelapseTimelapseIdRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/projects': {
-      id: '/projects'
-      path: '/projects'
-      fullPath: '/projects'
-      preLoaderRoute: typeof ProjectsRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/leaderboard': {
-      id: '/leaderboard'
-      path: '/leaderboard'
-      fullPath: '/leaderboard'
-      preLoaderRoute: typeof LeaderboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/clubs': {
-      id: '/clubs'
-      path: '/clubs'
-      fullPath: '/clubs'
-      preLoaderRoute: typeof ClubsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/challenges': {
-      id: '/challenges'
-      path: '/challenges'
-      fullPath: '/challenges'
-      preLoaderRoute: typeof ChallengesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/anotherPage': {
-      id: '/anotherPage'
-      path: '/anotherPage'
-      fullPath: '/anotherPage'
-      preLoaderRoute: typeof AnotherPageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects': {
+      id: '/_authenticated/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof AuthenticatedProjectsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/leaderboard': {
+      id: '/_authenticated/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof AuthenticatedLeaderboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/clubs': {
+      id: '/_authenticated/clubs'
+      path: '/clubs'
+      fullPath: '/clubs'
+      preLoaderRoute: typeof AuthenticatedClubsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/challenges': {
+      id: '/_authenticated/challenges'
+      path: '/challenges'
+      fullPath: '/challenges'
+      preLoaderRoute: typeof AuthenticatedChallengesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/anotherPage': {
+      id: '/_authenticated/anotherPage'
+      path: '/anotherPage'
+      fullPath: '/anotherPage'
+      preLoaderRoute: typeof AuthenticatedAnotherPageRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/timelapse/$timelapseId': {
-      id: '/timelapse/$timelapseId'
+    '/_authenticated/timelapse/$timelapseId': {
+      id: '/_authenticated/timelapse/$timelapseId'
       path: '/timelapse/$timelapseId'
       fullPath: '/timelapse/$timelapseId'
-      preLoaderRoute: typeof TimelapseTimelapseIdRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedTimelapseTimelapseIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/sessions/$sessionId': {
-      id: '/sessions/$sessionId'
+    '/_authenticated/sessions/$sessionId': {
+      id: '/_authenticated/sessions/$sessionId'
       path: '/sessions/$sessionId'
       fullPath: '/sessions/$sessionId'
-      preLoaderRoute: typeof SessionsSessionIdRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedSessionsSessionIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/projects/$projectId': {
-      id: '/projects/$projectId'
+    '/_authenticated/projects/$projectId': {
+      id: '/_authenticated/projects/$projectId'
       path: '/$projectId'
       fullPath: '/projects/$projectId'
-      preLoaderRoute: typeof ProjectsProjectIdRouteImport
-      parentRoute: typeof ProjectsRoute
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdRouteImport
+      parentRoute: typeof AuthenticatedProjectsRoute
     }
-    '/clubs/$clubId': {
-      id: '/clubs/$clubId'
+    '/_authenticated/clubs/$clubId': {
+      id: '/_authenticated/clubs/$clubId'
       path: '/$clubId'
       fullPath: '/clubs/$clubId'
-      preLoaderRoute: typeof ClubsClubIdRouteImport
-      parentRoute: typeof ClubsRoute
+      preLoaderRoute: typeof AuthenticatedClubsClubIdRouteImport
+      parentRoute: typeof AuthenticatedClubsRoute
     }
-    '/challenges/$challengeId': {
-      id: '/challenges/$challengeId'
+    '/_authenticated/challenges/$challengeId': {
+      id: '/_authenticated/challenges/$challengeId'
       path: '/$challengeId'
       fullPath: '/challenges/$challengeId'
-      preLoaderRoute: typeof ChallengesChallengeIdRouteImport
-      parentRoute: typeof ChallengesRoute
+      preLoaderRoute: typeof AuthenticatedChallengesChallengeIdRouteImport
+      parentRoute: typeof AuthenticatedChallengesRoute
     }
   }
 }
 
-interface ChallengesRouteChildren {
-  ChallengesChallengeIdRoute: typeof ChallengesChallengeIdRoute
+interface AuthenticatedChallengesRouteChildren {
+  AuthenticatedChallengesChallengeIdRoute: typeof AuthenticatedChallengesChallengeIdRoute
 }
 
-const ChallengesRouteChildren: ChallengesRouteChildren = {
-  ChallengesChallengeIdRoute: ChallengesChallengeIdRoute,
+const AuthenticatedChallengesRouteChildren: AuthenticatedChallengesRouteChildren =
+  {
+    AuthenticatedChallengesChallengeIdRoute:
+      AuthenticatedChallengesChallengeIdRoute,
+  }
+
+const AuthenticatedChallengesRouteWithChildren =
+  AuthenticatedChallengesRoute._addFileChildren(
+    AuthenticatedChallengesRouteChildren,
+  )
+
+interface AuthenticatedClubsRouteChildren {
+  AuthenticatedClubsClubIdRoute: typeof AuthenticatedClubsClubIdRoute
 }
 
-const ChallengesRouteWithChildren = ChallengesRoute._addFileChildren(
-  ChallengesRouteChildren,
-)
-
-interface ClubsRouteChildren {
-  ClubsClubIdRoute: typeof ClubsClubIdRoute
+const AuthenticatedClubsRouteChildren: AuthenticatedClubsRouteChildren = {
+  AuthenticatedClubsClubIdRoute: AuthenticatedClubsClubIdRoute,
 }
 
-const ClubsRouteChildren: ClubsRouteChildren = {
-  ClubsClubIdRoute: ClubsClubIdRoute,
+const AuthenticatedClubsRouteWithChildren =
+  AuthenticatedClubsRoute._addFileChildren(AuthenticatedClubsRouteChildren)
+
+interface AuthenticatedProjectsRouteChildren {
+  AuthenticatedProjectsProjectIdRoute: typeof AuthenticatedProjectsProjectIdRoute
 }
 
-const ClubsRouteWithChildren = ClubsRoute._addFileChildren(ClubsRouteChildren)
-
-interface ProjectsRouteChildren {
-  ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
+const AuthenticatedProjectsRouteChildren: AuthenticatedProjectsRouteChildren = {
+  AuthenticatedProjectsProjectIdRoute: AuthenticatedProjectsProjectIdRoute,
 }
 
-const ProjectsRouteChildren: ProjectsRouteChildren = {
-  ProjectsProjectIdRoute: ProjectsProjectIdRoute,
+const AuthenticatedProjectsRouteWithChildren =
+  AuthenticatedProjectsRoute._addFileChildren(
+    AuthenticatedProjectsRouteChildren,
+  )
+
+interface AuthenticatedRouteChildren {
+  AuthenticatedAnotherPageRoute: typeof AuthenticatedAnotherPageRoute
+  AuthenticatedChallengesRoute: typeof AuthenticatedChallengesRouteWithChildren
+  AuthenticatedClubsRoute: typeof AuthenticatedClubsRouteWithChildren
+  AuthenticatedLeaderboardRoute: typeof AuthenticatedLeaderboardRoute
+  AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRouteWithChildren
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedSessionsSessionIdRoute: typeof AuthenticatedSessionsSessionIdRoute
+  AuthenticatedTimelapseTimelapseIdRoute: typeof AuthenticatedTimelapseTimelapseIdRoute
 }
 
-const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
-  ProjectsRouteChildren,
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAnotherPageRoute: AuthenticatedAnotherPageRoute,
+  AuthenticatedChallengesRoute: AuthenticatedChallengesRouteWithChildren,
+  AuthenticatedClubsRoute: AuthenticatedClubsRouteWithChildren,
+  AuthenticatedLeaderboardRoute: AuthenticatedLeaderboardRoute,
+  AuthenticatedProjectsRoute: AuthenticatedProjectsRouteWithChildren,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedSessionsSessionIdRoute: AuthenticatedSessionsSessionIdRoute,
+  AuthenticatedTimelapseTimelapseIdRoute:
+    AuthenticatedTimelapseTimelapseIdRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
 )
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  AnotherPageRoute: AnotherPageRoute,
-  ChallengesRoute: ChallengesRouteWithChildren,
-  ClubsRoute: ClubsRouteWithChildren,
-  LeaderboardRoute: LeaderboardRoute,
-  ProjectsRoute: ProjectsRouteWithChildren,
-  SessionsSessionIdRoute: SessionsSessionIdRoute,
-  TimelapseTimelapseIdRoute: TimelapseTimelapseIdRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

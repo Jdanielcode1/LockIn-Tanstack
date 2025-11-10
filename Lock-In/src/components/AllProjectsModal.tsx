@@ -15,7 +15,7 @@ export function AllProjectsModal({ onClose }: AllProjectsModalProps) {
 
   const { data: projectsData } = useSuspenseQuery(
     convexQuery(api.projects.list, {
-      userId: user?.userId,
+      userId: user?._id,
       paginationOpts: { numItems: 20, cursor },
     })
   )

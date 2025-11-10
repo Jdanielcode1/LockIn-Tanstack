@@ -1,10 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
+import { getAuthUserId } from "./authHelpers";
 
 export const logInteraction = mutation({
   args: {
     sessionId: v.id("lockInSessions"),
-    userId: v.id("users"),
     question: v.string(),
     response: v.string(),
   },
@@ -12,9 +12,10 @@ export const logInteraction = mutation({
     logId: v.id("aiAssistanceLogs"),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const logId = await ctx.db.insert("aiAssistanceLogs", {
       sessionId: args.sessionId,
-      userId: args.userId,
+      userId: userId,
       question: args.question,
       response: args.response,
       timestamp: Date.now(),
@@ -63,8 +64,8 @@ export const getSessionLogs = query({
       timestamp: v.number(),
       helpful: v.optional(v.boolean()),
       user: v.object({
-        username: v.string(),
-        displayName: v.string(),
+        username: v.optional(v.string()),
+        displayName: v.optional(v.string()),
         avatarKey: v.optional(v.string()),
       }),
     })

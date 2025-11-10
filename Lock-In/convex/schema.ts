@@ -1,16 +1,21 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Better Auth will create its own tables (user, session, account, etc.)
+// We keep our custom users table with Lock-In specific fields
 export default defineSchema({
   users: defineTable({
-    username: v.string(),
-    displayName: v.string(),
+    // Custom Lock-In fields
+    username: v.optional(v.string()),
+    displayName: v.optional(v.string()),
     email: v.optional(v.string()),
     bio: v.optional(v.string()),
     avatarKey: v.optional(v.string()),
     location: v.optional(v.string()),
-    createdAt: v.number(),
-  }).index("by_username", ["username"]),
+    createdAt: v.optional(v.number()),
+  })
+    .index("by_username", ["username"])
+    .index("by_email", ["email"]),
 
   projects: defineTable({
     userId: v.id("users"),

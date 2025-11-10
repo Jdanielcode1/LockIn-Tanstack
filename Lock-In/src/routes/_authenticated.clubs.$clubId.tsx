@@ -9,7 +9,7 @@ import { CreateChallengeModal } from '../components/CreateChallengeModal'
 import type { Id } from '../../convex/_generated/dataModel'
 import { useState } from 'react'
 
-export const Route = createFileRoute('/clubs/$clubId')({
+export const Route = createFileRoute('/_authenticated/clubs/$clubId')({
   component: ClubDetail,
 })
 
@@ -45,7 +45,7 @@ function ClubDetail() {
   const { data: isMember } = useQuery({
     ...convexQuery(api.clubs.isMember, {
       clubId: clubId as Id<'clubs'>,
-      userId: user?.userId || ('' as any),
+      userId: user?._id || ('' as any),
     }),
     enabled: !!user,
   })
@@ -60,7 +60,10 @@ function ClubDetail() {
     }
 
     try {
-      await joinMutation({ clubId: clubId as Id<'clubs'>, userId: user.userId })
+      await joinMutation({
+        // userId removed - backend gets it from ctx.auth
+        clubId: clubId as Id<'clubs'>
+      })
     } catch (error) {
       console.error('Error joining club:', error)
       alert('Failed to join club')
@@ -71,7 +74,10 @@ function ClubDetail() {
     if (!user) return
 
     try {
-      await leaveMutation({ clubId: clubId as Id<'clubs'>, userId: user.userId })
+      await leaveMutation({
+        // userId removed - backend gets it from ctx.auth
+        clubId: clubId as Id<'clubs'>
+      })
     } catch (error) {
       console.error('Error leaving club:', error)
       alert('Failed to leave club')

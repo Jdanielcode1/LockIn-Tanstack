@@ -262,7 +262,6 @@ export const addParticipant = action({
       // Update database to mark user as participant
       await ctx.runMutation(api.lockInSessions.join, {
         sessionId: args.sessionId,
-        userId: args.userId,
       });
 
       return {

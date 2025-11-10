@@ -33,7 +33,7 @@ export function CreateClubModal({ onClose }: CreateClubModalProps) {
     setSubmitting(true)
     try {
       await createClub({
-        creatorId: user.userId,
+        // creatorId removed - backend gets it from ctx.auth
         name: name.trim(),
         description: description.trim(),
         type,

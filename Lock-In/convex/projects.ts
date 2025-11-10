@@ -1,10 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
+import { getAuthUserId } from "./authHelpers";
 
 export const create = mutation({
   args: {
-    userId: v.id("users"),
     title: v.string(),
     description: v.string(),
     targetHours: v.number(),
@@ -13,8 +13,9 @@ export const create = mutation({
     projectId: v.id("projects"),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const projectId = await ctx.db.insert("projects", {
-      userId: args.userId,
+      userId: userId,
       title: args.title,
       description: args.description,
       targetHours: args.targetHours,
@@ -71,8 +72,8 @@ export const get = query({
       createdAt: v.number(),
       timelapseCount: v.number(),
       user: v.object({
-        username: v.string(),
-        displayName: v.string(),
+        username: v.optional(v.string()),
+        displayName: v.optional(v.string()),
         avatarKey: v.optional(v.string()),
       }),
     }),

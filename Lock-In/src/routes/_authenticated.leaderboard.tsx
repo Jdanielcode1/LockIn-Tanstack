@@ -5,7 +5,7 @@ import { api } from '../../convex/_generated/api'
 import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 
-export const Route = createFileRoute('/leaderboard')({
+export const Route = createFileRoute('/_authenticated/leaderboard')({
   loader: async (opts) => {
     // Pre-load default period (week)
     await opts.context.queryClient.ensureQueryData(

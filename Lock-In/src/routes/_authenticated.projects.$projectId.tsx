@@ -10,7 +10,7 @@ import { CreateSessionModal } from '../components/CreateSessionModal'
 import { SessionRoomModal } from '../components/SessionRoomModal'
 import { useUser } from '../components/UserProvider'
 
-export const Route = createFileRoute('/projects/$projectId')({
+export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   component: ProjectDetail,
 })
 
@@ -263,7 +263,7 @@ function ProjectDetail() {
 
         {showSessionModal && user && (
           <CreateSessionModal
-            userId={user.userId}
+            userId={user._id}
             defaultProjectId={projectId as Id<'projects'>}
             onClose={() => setShowSessionModal(false)}
             onSessionCreated={(sessionId) => {

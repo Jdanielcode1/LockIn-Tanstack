@@ -7,7 +7,7 @@ import type { Id } from '../../convex/_generated/dataModel'
 import { SessionRoomModal } from '../components/SessionRoomModal'
 import { useUser } from '../components/UserProvider'
 
-export const Route = createFileRoute('/sessions/$sessionId')({
+export const Route = createFileRoute('/_authenticated/sessions/$sessionId')({
   component: SessionDetail,
 })
 

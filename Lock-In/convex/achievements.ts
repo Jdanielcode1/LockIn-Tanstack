@@ -176,7 +176,7 @@ export const getUserAchievements = query({
         name: "Early Adopter",
         description: "One of the first 100 users",
         icon: "🚀",
-        earned: user.createdAt < Date.now() - 90 * 24 * 60 * 60 * 1000, // Created more than 90 days ago as proxy
+        earned: user.createdAt ? user.createdAt < Date.now() - 90 * 24 * 60 * 60 * 1000 : false, // Created more than 90 days ago as proxy
       },
     ];
 

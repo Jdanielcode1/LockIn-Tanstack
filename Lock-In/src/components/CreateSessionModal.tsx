@@ -45,7 +45,7 @@ export function CreateSessionModal({ userId, onClose, defaultProjectId, onSessio
       const scheduledStartTime = new Date(scheduledTime).getTime();
 
       const result = await createSessionMutation({
-        userId,
+        // userId removed - backend gets it from ctx.auth
         projectId: selectedProjectId || undefined,
         title,
         description,

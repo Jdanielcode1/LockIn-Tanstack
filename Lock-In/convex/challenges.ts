@@ -1,10 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
+import { getAuthUserId } from "./authHelpers";
 
 export const create = mutation({
   args: {
-    creatorId: v.id("users"),
     clubId: v.optional(v.id("clubs")), // Optional: link challenge to a club
     title: v.string(),
     description: v.string(),
@@ -22,12 +22,13 @@ export const create = mutation({
     challengeId: v.id("challenges"),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     // If clubId is provided, verify creator is a member of the club
     if (args.clubId) {
       const membership = await ctx.db
         .query("clubMembers")
         .withIndex("by_club_and_user", (q) =>
-          q.eq("clubId", args.clubId!).eq("userId", args.creatorId)
+          q.eq("clubId", args.clubId!).eq("userId", userId)
         )
         .first();
 
@@ -37,14 +38,21 @@ export const create = mutation({
     }
 
     const challengeId = await ctx.db.insert("challenges", {
-      ...args,
+      creatorId: userId,
+      clubId: args.clubId,
+      title: args.title,
+      description: args.description,
+      type: args.type,
+      goal: args.goal,
+      startDate: args.startDate,
+      endDate: args.endDate,
       createdAt: Date.now(),
     });
 
     // Auto-join creator to the challenge
     await ctx.db.insert("challengeParticipants", {
       challengeId,
-      userId: args.creatorId,
+      userId: userId,
       joinedAt: Date.now(),
     });
 
@@ -143,15 +151,15 @@ export const get = query({
 export const join = mutation({
   args: {
     challengeId: v.id("challenges"),
-    userId: v.id("users"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     // Check if already joined
     const existing = await ctx.db
       .query("challengeParticipants")
       .withIndex("by_challenge_and_user", (q) =>
-        q.eq("challengeId", args.challengeId).eq("userId", args.userId)
+        q.eq("challengeId", args.challengeId).eq("userId", userId)
       )
       .first();
 
@@ -161,7 +169,7 @@ export const join = mutation({
 
     await ctx.db.insert("challengeParticipants", {
       challengeId: args.challengeId,
-      userId: args.userId,
+      userId: userId,
       joinedAt: Date.now(),
     });
 
@@ -172,14 +180,14 @@ export const join = mutation({
 export const leave = mutation({
   args: {
     challengeId: v.id("challenges"),
-    userId: v.id("users"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
     const participant = await ctx.db
       .query("challengeParticipants")
       .withIndex("by_challenge_and_user", (q) =>
-        q.eq("challengeId", args.challengeId).eq("userId", args.userId)
+        q.eq("challengeId", args.challengeId).eq("userId", userId)
       )
       .first();
 

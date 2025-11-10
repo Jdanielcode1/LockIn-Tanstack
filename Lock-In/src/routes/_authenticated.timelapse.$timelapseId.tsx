@@ -8,7 +8,7 @@ import type { Id } from '../../convex/_generated/dataModel'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { useUser } from '../components/UserProvider'
 
-export const Route = createFileRoute('/timelapse/$timelapseId')({
+export const Route = createFileRoute('/_authenticated/timelapse/$timelapseId')({
   component: TimelapseDetail,
 })
 
@@ -26,7 +26,7 @@ function TimelapseDetail() {
 
   const { data: isLiked } = useQuery({
     ...convexQuery(api.social.isLiked, {
-      userId: user?.userId || ('' as Id<'users'>),
+      userId: user?._id || ('' as Id<'users'>),
       timelapseId: timelapseId as Id<'timelapses'>,
     }),
     enabled: !!user,
@@ -71,7 +71,7 @@ function TimelapseDetail() {
       return
     }
     await toggleLike({
-      userId: user.userId,
+      // userId removed - backend gets it from ctx.auth
       timelapseId: timelapseId as Id<'timelapses'>
     })
   }
@@ -86,7 +86,7 @@ function TimelapseDetail() {
     }
 
     await addComment({
-      userId: user.userId,
+      // userId removed - backend gets it from ctx.auth
       timelapseId: timelapseId as Id<'timelapses'>,
       content: newComment,
     })

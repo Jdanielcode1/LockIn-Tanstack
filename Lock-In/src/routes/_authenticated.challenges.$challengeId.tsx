@@ -7,7 +7,7 @@ import type { Id } from '../../convex/_generated/dataModel'
 import { useUser } from '../components/UserProvider'
 import { Avatar } from '../components/Avatar'
 
-export const Route = createFileRoute('/challenges/$challengeId')({
+export const Route = createFileRoute('/_authenticated/challenges/$challengeId')({
   component: ChallengeDetail,
 })
 
@@ -43,7 +43,7 @@ function ChallengeDetail() {
   const { data: isParticipating } = useQuery({
     ...convexQuery(api.challenges.isParticipating, {
       challengeId: challengeId as Id<'challenges'>,
-      userId: user?.userId || ('' as any),
+      userId: user?._id || ('' as any),
     }),
     enabled: !!user,
   })
@@ -58,8 +58,8 @@ function ChallengeDetail() {
     }
     try {
       await joinMutation({
+        // userId removed - backend gets it from ctx.auth
         challengeId: challengeId as Id<'challenges'>,
-        userId: user.userId,
       })
     } catch (error) {
       console.error('Error joining challenge:', error)
@@ -70,8 +70,8 @@ function ChallengeDetail() {
     if (!user) return
     try {
       await leaveMutation({
+        // userId removed - backend gets it from ctx.auth
         challengeId: challengeId as Id<'challenges'>,
-        userId: user.userId,
       })
     } catch (error) {
       console.error('Error leaving challenge:', error)
@@ -432,7 +432,7 @@ function ChallengeDetail() {
                 </h3>
                 {(() => {
                   const userProgress = leaderboard?.find(
-                    (p: any) => p.userId === user.userId
+                    (p: any) => p.userId === user._id
                   )
                   return userProgress ? (
                     <div>
@@ -444,7 +444,7 @@ function ChallengeDetail() {
                       </div>
                       <div className="text-xs text-[#8b949e]">
                         Rank: #
-                        {leaderboard.findIndex((p: any) => p.userId === user.userId) + 1}{' '}
+                        {leaderboard.findIndex((p: any) => p.userId === user._id) + 1}{' '}
                         of {leaderboard.length}
                       </div>
                     </div>
