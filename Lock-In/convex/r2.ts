@@ -24,9 +24,27 @@ export const getVideoUrl = query({
   },
   returns: v.string(),
   handler: async (ctx, args) => {
-    return await r2.getUrl(args.videoKey, {
-      expiresIn: 60 * 60 * 24, // 24 hours
+    const expiresIn = 60 * 60 * 24; // 24 hours
+    const now = Date.now();
+    const expiresAt = new Date(now + expiresIn * 1000);
+
+    console.log('[getVideoUrl] Generating signed URL:', {
+      videoKey: args.videoKey,
+      expiresInSeconds: expiresIn,
+      expiresInHours: expiresIn / 3600,
+      expiresAt: expiresAt.toISOString(),
+      generatedAt: new Date(now).toISOString()
     });
+
+    const url = await r2.getUrl(args.videoKey, { expiresIn });
+
+    console.log('[getVideoUrl] URL generated:', {
+      videoKey: args.videoKey,
+      urlPrefix: url.substring(0, 50) + '...',
+      hasSignature: url.includes('Signature=')
+    });
+
+    return url;
   },
 });
 
@@ -56,11 +74,29 @@ export const getThumbnailUrl = query({
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
     if (!args.thumbnailKey || args.thumbnailKey.trim() === '') {
+      console.log('[getThumbnailUrl] Empty thumbnail key, returning null');
       return null;
     }
-    return await r2.getUrl(args.thumbnailKey, {
-      expiresIn: 60 * 60 * 24, // 24 hours
+
+    const expiresIn = 60 * 60 * 24; // 24 hours
+    const now = Date.now();
+    const expiresAt = new Date(now + expiresIn * 1000);
+
+    console.log('[getThumbnailUrl] Generating signed URL:', {
+      thumbnailKey: args.thumbnailKey,
+      expiresInSeconds: expiresIn,
+      expiresAt: expiresAt.toISOString(),
+      generatedAt: new Date(now).toISOString()
     });
+
+    const url = await r2.getUrl(args.thumbnailKey, { expiresIn });
+
+    console.log('[getThumbnailUrl] URL generated:', {
+      thumbnailKey: args.thumbnailKey,
+      urlPrefix: url.substring(0, 50) + '...'
+    });
+
+    return url;
   },
 });
 

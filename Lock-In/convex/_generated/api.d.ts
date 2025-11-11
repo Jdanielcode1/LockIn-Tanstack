@@ -12,6 +12,7 @@ import type * as achievements from "../achievements.js";
 import type * as aiAssistance from "../aiAssistance.js";
 import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
+import type * as autumn from "../autumn.js";
 import type * as challenges from "../challenges.js";
 import type * as clubs from "../clubs.js";
 import type * as follows from "../follows.js";
@@ -24,6 +25,7 @@ import type * as r2 from "../r2.js";
 import type * as realtimeActions from "../realtimeActions.js";
 import type * as social from "../social.js";
 import type * as stats from "../stats.js";
+import type * as subscriptions from "../subscriptions.js";
 import type * as timelapses from "../timelapses.js";
 import type * as users from "../users.js";
 
@@ -46,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   aiAssistance: typeof aiAssistance;
   auth: typeof auth;
   authHelpers: typeof authHelpers;
+  autumn: typeof autumn;
   challenges: typeof challenges;
   clubs: typeof clubs;
   follows: typeof follows;
@@ -58,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   realtimeActions: typeof realtimeActions;
   social: typeof social;
   stats: typeof stats;
+  subscriptions: typeof subscriptions;
   timelapses: typeof timelapses;
   users: typeof users;
 }>;
@@ -2296,4 +2300,5 @@ export declare const components: {
       updateMany: FunctionReference<"mutation", "internal", any, any>;
     };
   };
+  autumn: {};
 };

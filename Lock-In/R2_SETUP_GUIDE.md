@@ -32,14 +32,23 @@ CORS (Cross-Origin Resource Sharing) allows your web app to upload/download vide
   {
     "AllowedOrigins": [
       "http://localhost:5173",
-      "http://localhost:3000"
+      "http://localhost:3000",
+      "http://localhost:3001"
     ],
     "AllowedMethods": [
       "GET",
-      "PUT"
+      "PUT",
+      "HEAD"
     ],
     "AllowedHeaders": [
-      "Content-Type"
+      "Content-Type",
+      "Range",
+      "Accept-Ranges"
+    ],
+    "ExposeHeaders": [
+      "Content-Length",
+      "Content-Range",
+      "Accept-Ranges"
     ]
   }
 ]
@@ -47,12 +56,16 @@ CORS (Cross-Origin Resource Sharing) allows your web app to upload/download vide
 
 5. Click **Save**
 
-**Important**: When you deploy to production, add your production domain to `AllowedOrigins`:
+**Important Notes**:
+- `Range` and `Accept-Ranges` headers are **required for video playback**. These enable video seeking/scrubbing and partial content requests, which browsers need to efficiently load and play videos.
+- `ExposeHeaders` allows the browser to read these headers from R2 responses, which is necessary for proper video streaming.
+- When you deploy to production, add your production domain to `AllowedOrigins`:
 
 ```json
 {
   "AllowedOrigins": [
     "http://localhost:5173",
+    "http://localhost:3001",
     "https://your-production-domain.com"
   ],
   ...
@@ -144,9 +157,29 @@ To verify everything is configured correctly:
 **Problem**: Browser shows CORS policy error
 
 **Solutions**:
-- Verify CORS policy includes your origin (e.g., `http://localhost:5173`)
-- Check that `AllowedMethods` includes both `GET` and `PUT`
-- Make sure `Content-Type` is in `AllowedHeaders`
+- Verify CORS policy includes your origin (e.g., `http://localhost:3001`)
+- Check that `AllowedMethods` includes `GET`, `PUT`, and `HEAD`
+- Make sure `Content-Type`, `Range`, and `Accept-Ranges` are in `AllowedHeaders`
+- Verify `ExposeHeaders` is set correctly
+
+### Video Won't Play (Thumbnails Show)
+
+**Problem**: Video thumbnails load but videos stay in loading state or fail to play
+
+**Solutions**:
+1. **Check CORS headers**: Missing `Range` and `Accept-Ranges` headers prevent video playback
+   - Update CORS policy to include these headers (see Step 2)
+2. **Check browser console**: Look for network errors or video element errors
+   - `MEDIA_ERR_NETWORK`: Network/CORS issue
+   - `MEDIA_ERR_SRC_NOT_SUPPORTED`: Format issue or URL expired
+   - `MEDIA_ERR_DECODE`: Video encoding issue
+3. **Verify signed URL**: Copy video URL from network tab and test in new browser tab
+   - If URL returns 403: Check R2 permissions
+   - If URL returns 404: Video may not exist in bucket
+4. **Check URL expiration**: Signed URLs expire after 24 hours
+   - Use retry button to fetch fresh URL
+5. **Verify video format**: R2 bucket should contain valid video files (MP4, WebM, etc.)
+6. **Check video encoding**: Ensure videos are web-compatible (H.264 codec recommended)
 
 ### "Bucket Not Found" Error
 

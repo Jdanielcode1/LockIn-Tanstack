@@ -182,9 +182,10 @@ export default {
         const videoUrl = await getVideoUrl(env, videoKey);
         console.log('Got video URL from Convex');
 
-        // Get Durable Object to extract frames
-        const id = env.VIDEO_PROCESSOR.idFromName("video-processor-ai-thumbnails");
+        // 🔄 Phase 4: Get Durable Object per-timelapseId for concurrent processing
+        const id = env.VIDEO_PROCESSOR.idFromName(`thumbnail-${timelapseId}`);
         const stub = env.VIDEO_PROCESSOR.get(id);
+        console.log(`Using Durable Object instance: thumbnail-${timelapseId}`);
 
         // Extract frames from container with 2 minute timeout
         const extractResponse = await fetchWithTimeout(
@@ -298,9 +299,10 @@ export default {
         const videoUrl = await getVideoUrl(env, videoKey);
         console.log('Got video URL from Convex');
 
-        // Get Durable Object
-        const id = env.VIDEO_PROCESSOR.idFromName("video-processor-ai-thumbnails");
+        // 🔄 Phase 4: Get Durable Object per-timelapseId for concurrent processing
+        const id = env.VIDEO_PROCESSOR.idFromName(`process-${timelapseId}`);
         const stub = env.VIDEO_PROCESSOR.get(id);
+        console.log(`Using Durable Object instance: process-${timelapseId}`);
 
         // Forward to container with videoUrl, with 5 minute timeout
         const containerResponse = await fetchWithTimeout(
@@ -363,9 +365,10 @@ export default {
 
         console.log(`Cancelling processing for timelapse: ${timelapseId}`);
 
-        // Get Durable Object
-        const id = env.VIDEO_PROCESSOR.idFromName("video-processor-ai-thumbnails");
+        // 🔄 Phase 4: Get the specific Durable Object instance for this timelapse
+        const id = env.VIDEO_PROCESSOR.idFromName(`process-${timelapseId}`);
         const stub = env.VIDEO_PROCESSOR.get(id);
+        console.log(`Cancelling Durable Object instance: process-${timelapseId}`);
 
         // Forward cancellation request to container
         const cancelResponse = await stub.fetch(

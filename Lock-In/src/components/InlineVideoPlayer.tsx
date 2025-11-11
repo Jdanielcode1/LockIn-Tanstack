@@ -20,14 +20,22 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(true)
   const [showVideo, setShowVideo] = useState(false)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+  // State to store actual video dimensions from metadata
+  const [actualWidth, setActualWidth] = useState<number | undefined>(videoWidth)
+  const [actualHeight, setActualHeight] = useState<number | undefined>(videoHeight)
 
-  // Calculate aspect ratio based on video dimensions
+  // Calculate aspect ratio based on video dimensions (uses actual dimensions if available)
   const getAspectRatioClass = () => {
-    if (!videoWidth || !videoHeight) {
+    const width = actualWidth || videoWidth
+    const height = actualHeight || videoHeight
+
+    if (!width || !height) {
       return 'aspect-video' // Default to 16:9 if dimensions not available
     }
 
-    const aspectRatio = videoWidth / videoHeight
+    const aspectRatio = width / height
 
     // Vertical video (TikTok style: 9:16 or portrait)
     if (aspectRatio < 0.8) {
@@ -45,8 +53,10 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
 
   const aspectRatioClass = getAspectRatioClass()
 
-  // Check if video is vertical
-  const isVerticalVideo = videoWidth && videoHeight && (videoWidth / videoHeight) < 0.8
+  // Check if video is vertical (uses actual dimensions if available)
+  const width = actualWidth || videoWidth
+  const height = actualHeight || videoHeight
+  const isVerticalVideo = width && height && (width / height) < 0.8
 
   // Fetch thumbnail URL if available
   const { data: thumbnailUrl, isLoading: thumbnailLoading } = useQuery({
@@ -59,9 +69,11 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
   // Fetch video URL immediately to enable progressive loading
   // Browser will download first few seconds with preload="metadata"
   const shouldFetchVideo = true
-  const { data: videoUrl } = useQuery({
+  const { data: videoUrl, error: videoQueryError, refetch: refetchVideo } = useQuery({
     ...convexQuery(api.r2.getVideoUrl, { videoKey }),
     enabled: shouldFetchVideo,
+    retry: 3,
+    retryDelay: 1000,
   })
 
   useEffect(() => {
@@ -85,6 +97,17 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
     if (videoRef.current) {
       setDuration(videoRef.current.duration)
       setIsLoading(false)
+
+      // Extract actual video dimensions from metadata if not already set
+      if (!actualWidth || !actualHeight) {
+        setActualWidth(videoRef.current.videoWidth)
+        setActualHeight(videoRef.current.videoHeight)
+        console.log('🎬 [InlineVideoPlayer] Extracted video dimensions:', {
+          width: videoRef.current.videoWidth,
+          height: videoRef.current.videoHeight,
+          aspectRatio: (videoRef.current.videoWidth / videoRef.current.videoHeight).toFixed(2)
+        })
+      }
     }
   }
 
@@ -94,6 +117,49 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
 
   const handleCanPlay = () => {
     setIsBuffering(false)
+  }
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const video = e.currentTarget
+    const error = video.error
+
+    let errorMessage = 'Unknown video error'
+    if (error) {
+      switch (error.code) {
+        case MediaError.MEDIA_ERR_ABORTED:
+          errorMessage = 'Video playback was aborted'
+          break
+        case MediaError.MEDIA_ERR_NETWORK:
+          errorMessage = 'Network error while loading video'
+          break
+        case MediaError.MEDIA_ERR_DECODE:
+          errorMessage = 'Video decoding failed'
+          break
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+          errorMessage = 'Video format not supported or URL expired'
+          break
+      }
+    }
+
+    console.error('🎬 [InlineVideoPlayer] Video error:', {
+      videoKey,
+      videoUrl,
+      errorCode: error?.code,
+      errorMessage,
+      retryCount
+    })
+
+    setVideoError(errorMessage)
+    setIsBuffering(false)
+    setIsLoading(false)
+  }
+
+  const handleRetry = () => {
+    console.log('🔄 [InlineVideoPlayer] Retrying video load...', { videoKey, retryCount: retryCount + 1 })
+    setVideoError(null)
+    setRetryCount(prev => prev + 1)
+    setShowVideo(false)
+    refetchVideo()
   }
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -151,6 +217,8 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
           onWaiting={handleWaiting}
           onCanPlay={handleCanPlay}
           onEnded={() => onTogglePlay()}
+          onError={handleVideoError}
+          onLoadStart={() => console.log('🎬 [InlineVideoPlayer] Video load started')}
           muted={isMuted}
           playsInline
           preload="metadata"
@@ -164,6 +232,21 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
             src={thumbnailUrl}
             alt="Video thumbnail"
             className={`${isVerticalVideo ? 'max-w-sm' : 'w-full'} ${aspectRatioClass} object-cover`}
+            onLoad={(e) => {
+              // If we don't have video dimensions yet, try to infer from thumbnail
+              if (!actualWidth && !actualHeight && !videoWidth && !videoHeight) {
+                const img = e.currentTarget
+                if (img.naturalWidth && img.naturalHeight) {
+                  setActualWidth(img.naturalWidth)
+                  setActualHeight(img.naturalHeight)
+                  console.log('🎬 [InlineVideoPlayer] Extracted thumbnail dimensions:', {
+                    width: img.naturalWidth,
+                    height: img.naturalHeight,
+                    aspectRatio: (img.naturalWidth / img.naturalHeight).toFixed(2)
+                  })
+                }
+              }
+            }}
           />
           {/* Large play button overlay on thumbnail */}
           <div className="absolute inset-0 flex items-center justify-center">
@@ -301,8 +384,46 @@ export function InlineVideoPlayer({ videoKey, thumbnailKey, isPlaying, onToggleP
         </div>
       )}
 
+      {/* Show error state if video query failed */}
+      {videoQueryError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0d1117]/95 z-30">
+          <div className="flex flex-col items-center gap-3 px-4 text-center">
+            <div className="text-4xl">⚠️</div>
+            <div>
+              <p className="text-red-400 text-sm mb-1">Failed to load video URL</p>
+              <p className="text-xs text-[#8b949e]">The video may have been moved or deleted</p>
+            </div>
+            <button
+              onClick={handleRetry}
+              className="px-3 py-1.5 bg-[#238636] hover:bg-[#2ea043] text-white rounded text-xs transition"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Show error state if video element failed */}
+      {videoError && !videoQueryError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0d1117]/95 z-30">
+          <div className="flex flex-col items-center gap-3 px-4 text-center">
+            <div className="text-4xl">❌</div>
+            <div>
+              <p className="text-red-400 text-sm mb-1">Video playback failed</p>
+              <p className="text-xs text-[#8b949e]">{videoError}</p>
+            </div>
+            <button
+              onClick={handleRetry}
+              className="px-3 py-1.5 bg-[#238636] hover:bg-[#2ea043] text-white rounded text-xs transition"
+            >
+              Retry (Attempt {retryCount + 1})
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Show buffering indicator when video is loading or buffering */}
-      {(isLoading || isBuffering) && showVideo && (
+      {(isLoading || isBuffering) && showVideo && !videoError && !videoQueryError && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#0d1117]/80 z-30">
           <div className="flex flex-col items-center gap-2">
             <div className="animate-spin text-4xl">⏳</div>

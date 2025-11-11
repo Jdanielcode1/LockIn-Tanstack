@@ -11,10 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
+import { Route as AuthenticatedSubscriptionRouteImport } from './routes/_authenticated.subscription'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated.projects'
 import { Route as AuthenticatedLeaderboardRouteImport } from './routes/_authenticated.leaderboard'
 import { Route as AuthenticatedClubsRouteImport } from './routes/_authenticated.clubs'
 import { Route as AuthenticatedChallengesRouteImport } from './routes/_authenticated.challenges'
+import { Route as AuthenticatedAutumnDemoRouteImport } from './routes/_authenticated.autumn-demo'
 import { Route as AuthenticatedAnotherPageRouteImport } from './routes/_authenticated.anotherPage'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthenticatedTimelapseTimelapseIdRouteImport } from './routes/_authenticated.timelapse.$timelapseId'
@@ -32,6 +34,12 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedSubscriptionRoute =
+  AuthenticatedSubscriptionRouteImport.update({
+    id: '/subscription',
+    path: '/subscription',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -51,6 +59,11 @@ const AuthenticatedClubsRoute = AuthenticatedClubsRouteImport.update({
 const AuthenticatedChallengesRoute = AuthenticatedChallengesRouteImport.update({
   id: '/challenges',
   path: '/challenges',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAutumnDemoRoute = AuthenticatedAutumnDemoRouteImport.update({
+  id: '/autumn-demo',
+  path: '/autumn-demo',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedAnotherPageRoute =
@@ -97,10 +110,12 @@ const AuthenticatedChallengesChallengeIdRoute =
 
 export interface FileRoutesByFullPath {
   '/anotherPage': typeof AuthenticatedAnotherPageRoute
+  '/autumn-demo': typeof AuthenticatedAutumnDemoRoute
   '/challenges': typeof AuthenticatedChallengesRouteWithChildren
   '/clubs': typeof AuthenticatedClubsRouteWithChildren
   '/leaderboard': typeof AuthenticatedLeaderboardRoute
   '/projects': typeof AuthenticatedProjectsRouteWithChildren
+  '/subscription': typeof AuthenticatedSubscriptionRoute
   '/': typeof AuthenticatedIndexRoute
   '/challenges/$challengeId': typeof AuthenticatedChallengesChallengeIdRoute
   '/clubs/$clubId': typeof AuthenticatedClubsClubIdRoute
@@ -111,10 +126,12 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/anotherPage': typeof AuthenticatedAnotherPageRoute
+  '/autumn-demo': typeof AuthenticatedAutumnDemoRoute
   '/challenges': typeof AuthenticatedChallengesRouteWithChildren
   '/clubs': typeof AuthenticatedClubsRouteWithChildren
   '/leaderboard': typeof AuthenticatedLeaderboardRoute
   '/projects': typeof AuthenticatedProjectsRouteWithChildren
+  '/subscription': typeof AuthenticatedSubscriptionRoute
   '/': typeof AuthenticatedIndexRoute
   '/challenges/$challengeId': typeof AuthenticatedChallengesChallengeIdRoute
   '/clubs/$clubId': typeof AuthenticatedClubsClubIdRoute
@@ -127,10 +144,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/_authenticated/anotherPage': typeof AuthenticatedAnotherPageRoute
+  '/_authenticated/autumn-demo': typeof AuthenticatedAutumnDemoRoute
   '/_authenticated/challenges': typeof AuthenticatedChallengesRouteWithChildren
   '/_authenticated/clubs': typeof AuthenticatedClubsRouteWithChildren
   '/_authenticated/leaderboard': typeof AuthenticatedLeaderboardRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRouteWithChildren
+  '/_authenticated/subscription': typeof AuthenticatedSubscriptionRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/challenges/$challengeId': typeof AuthenticatedChallengesChallengeIdRoute
   '/_authenticated/clubs/$clubId': typeof AuthenticatedClubsClubIdRoute
@@ -143,10 +162,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/anotherPage'
+    | '/autumn-demo'
     | '/challenges'
     | '/clubs'
     | '/leaderboard'
     | '/projects'
+    | '/subscription'
     | '/'
     | '/challenges/$challengeId'
     | '/clubs/$clubId'
@@ -157,10 +178,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/anotherPage'
+    | '/autumn-demo'
     | '/challenges'
     | '/clubs'
     | '/leaderboard'
     | '/projects'
+    | '/subscription'
     | '/'
     | '/challenges/$challengeId'
     | '/clubs/$clubId'
@@ -172,10 +195,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/_authenticated/anotherPage'
+    | '/_authenticated/autumn-demo'
     | '/_authenticated/challenges'
     | '/_authenticated/clubs'
     | '/_authenticated/leaderboard'
     | '/_authenticated/projects'
+    | '/_authenticated/subscription'
     | '/_authenticated/'
     | '/_authenticated/challenges/$challengeId'
     | '/_authenticated/clubs/$clubId'
@@ -206,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/subscription': {
+      id: '/_authenticated/subscription'
+      path: '/subscription'
+      fullPath: '/subscription'
+      preLoaderRoute: typeof AuthenticatedSubscriptionRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/projects': {
       id: '/_authenticated/projects'
       path: '/projects'
@@ -232,6 +264,13 @@ declare module '@tanstack/react-router' {
       path: '/challenges'
       fullPath: '/challenges'
       preLoaderRoute: typeof AuthenticatedChallengesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/autumn-demo': {
+      id: '/_authenticated/autumn-demo'
+      path: '/autumn-demo'
+      fullPath: '/autumn-demo'
+      preLoaderRoute: typeof AuthenticatedAutumnDemoRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/anotherPage': {
@@ -327,10 +366,12 @@ const AuthenticatedProjectsRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAnotherPageRoute: typeof AuthenticatedAnotherPageRoute
+  AuthenticatedAutumnDemoRoute: typeof AuthenticatedAutumnDemoRoute
   AuthenticatedChallengesRoute: typeof AuthenticatedChallengesRouteWithChildren
   AuthenticatedClubsRoute: typeof AuthenticatedClubsRouteWithChildren
   AuthenticatedLeaderboardRoute: typeof AuthenticatedLeaderboardRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRouteWithChildren
+  AuthenticatedSubscriptionRoute: typeof AuthenticatedSubscriptionRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedSessionsSessionIdRoute: typeof AuthenticatedSessionsSessionIdRoute
   AuthenticatedTimelapseTimelapseIdRoute: typeof AuthenticatedTimelapseTimelapseIdRoute
@@ -338,10 +379,12 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAnotherPageRoute: AuthenticatedAnotherPageRoute,
+  AuthenticatedAutumnDemoRoute: AuthenticatedAutumnDemoRoute,
   AuthenticatedChallengesRoute: AuthenticatedChallengesRouteWithChildren,
   AuthenticatedClubsRoute: AuthenticatedClubsRouteWithChildren,
   AuthenticatedLeaderboardRoute: AuthenticatedLeaderboardRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRouteWithChildren,
+  AuthenticatedSubscriptionRoute: AuthenticatedSubscriptionRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedSessionsSessionIdRoute: AuthenticatedSessionsSessionIdRoute,
   AuthenticatedTimelapseTimelapseIdRoute:

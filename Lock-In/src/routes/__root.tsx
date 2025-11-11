@@ -17,6 +17,7 @@ import { getCookie, getRequest } from '@tanstack/react-start/server'
 import appCss from '~/styles/app.css?url'
 import { UserProvider } from '../components/UserProvider'
 import { authClient } from '../lib/auth-client'
+import { AutumnProvider } from '../lib/autumn-client'
 
 // Get auth information for SSR using available cookies
 const fetchAuth = createServerFn({ method: 'GET' }).handler(async () => {
@@ -94,9 +95,10 @@ function RootComponent() {
       client={context.convexClient}
       authClient={authClient}
     >
-      <RootDocument>
-        <UserProvider>
-          <nav className="bg-[#161b22] border-b border-[#30363d] text-[#c9d1d9]">
+      <AutumnProvider>
+        <RootDocument>
+          <UserProvider>
+            <nav className="bg-[#161b22] border-b border-[#30363d] text-[#c9d1d9]">
             <div className="container mx-auto px-4 py-3">
               <div className="flex items-center justify-between">
                 <Link to="/" className="text-base font-semibold hover:text-white transition flex items-center gap-2">
@@ -132,6 +134,13 @@ function RootComponent() {
                   >
                     Profile
                   </Link>
+                  <Link
+                    to="/subscription"
+                    className="hover:text-white transition text-sm"
+                    activeProps={{ className: 'text-white font-semibold' }}
+                  >
+                    Subscription
+                  </Link>
                 </div>
               </div>
             </div>
@@ -146,8 +155,9 @@ function RootComponent() {
           }>
             <Outlet />
           </React.Suspense>
-        </UserProvider>
-      </RootDocument>
+          </UserProvider>
+        </RootDocument>
+      </AutumnProvider>
     </ConvexBetterAuthProvider>
   )
 }
