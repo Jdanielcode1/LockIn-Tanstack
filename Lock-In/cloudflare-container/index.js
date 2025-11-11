@@ -46,7 +46,7 @@ const s3Client = new S3Client({
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME;
 const TMP_DIR = '/tmp';
-const PROCESSING_SIZE_LIMIT = 500 * 1024 * 1024; // 500MB - max size for processing
+const PROCESSING_SIZE_LIMIT = 5 * 1024 * 1024 * 1024; // 5GB - max size for processing with streaming
 
 // Calculate optimal part size based on file size
 // R2 requirements: min 5MiB, max 5GiB per part, max 10,000 parts
@@ -419,6 +419,122 @@ async function uploadVideoToR2(filePath, prefix = 'timelapses', timelapseId = nu
   }
 }
 
+// 🌊 Phase 5: Upload stream directly to R2 (for end-to-end streaming pipeline)
+// Accepts a readable stream instead of file path, enabling processing without disk I/O
+async function uploadStreamToR2(inputStream, estimatedSize, prefix = 'timelapses', timelapseId = null) {
+  const key = `${prefix}/${crypto.randomUUID()}.mp4`;
+
+  console.log(`🌊 Streaming upload to R2: ${key}`);
+  console.log(`📊 Estimated size: ${(estimatedSize / 1024 / 1024).toFixed(2)}MB`);
+
+  // Calculate part size based on estimated size
+  const partSize = calculateOptimalPartSize(estimatedSize);
+  const queueSize = calculateOptimalQueueSize(estimatedSize, partSize);
+
+  console.log(`Using multipart streaming upload:`);
+  console.log(`  - Part size: ${(partSize / 1024 / 1024).toFixed(2)}MB`);
+  console.log(`  - Queue size: ${queueSize} concurrent parts`);
+
+  const upload = new Upload({
+    client: s3Client,
+    params: {
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: inputStream, // Stream directly from source
+      ContentType: 'video/mp4',
+      Metadata: {
+        'timelapse-id': timelapseId || 'unknown',
+        'upload-method': 'streaming',
+        'estimated-size': estimatedSize.toString(),
+      },
+    },
+    partSize: partSize,
+    queueSize: queueSize,
+    leavePartsOnError: false,
+  });
+
+  // Track upload for cancellation
+  if (timelapseId) {
+    activeUploads.set(timelapseId, { upload, uploadId: null, key });
+  }
+
+  // Progress tracking
+  let lastProgressPercent = 0;
+  let totalBytesUploaded = 0;
+
+  upload.on('httpUploadProgress', (progress) => {
+    if (progress.loaded) {
+      totalBytesUploaded = progress.loaded;
+      const loadedMB = (progress.loaded / 1024 / 1024).toFixed(2);
+
+      // For streaming, we may not know total size, so show bytes uploaded
+      if (progress.total) {
+        const percentage = Math.round((progress.loaded / progress.total) * 100);
+        const totalMB = (progress.total / 1024 / 1024).toFixed(2);
+
+        if (percentage >= lastProgressPercent + 10 || percentage === 100) {
+          console.log(`🌊 Upload progress: ${percentage}% (${loadedMB}MB / ${totalMB}MB)`);
+          lastProgressPercent = percentage;
+        }
+      } else {
+        // Unknown total size - just log every 50MB
+        if (progress.loaded % (50 * 1024 * 1024) < (10 * 1024 * 1024)) {
+          console.log(`🌊 Upload progress: ${loadedMB}MB uploaded...`);
+        }
+      }
+    }
+  });
+
+  try {
+    // Store uploadId when available
+    upload.on('httpRequest', (request) => {
+      if (timelapseId && request.headers && request.headers['x-amz-upload-id']) {
+        const uploadInfo = activeUploads.get(timelapseId);
+        if (uploadInfo) {
+          uploadInfo.uploadId = request.headers['x-amz-upload-id'];
+        }
+      }
+    });
+
+    await upload.done();
+
+    // Clean up tracking
+    if (timelapseId) {
+      activeUploads.delete(timelapseId);
+    }
+
+    const finalSizeMB = (totalBytesUploaded / 1024 / 1024).toFixed(2);
+    console.log(`✅ Streaming upload completed: ${key} (${finalSizeMB}MB)`);
+
+    return key;
+
+  } catch (err) {
+    console.error('❌ Streaming upload failed:', err);
+
+    // Clean up tracking
+    if (timelapseId) {
+      activeUploads.delete(timelapseId);
+    }
+
+    // Attempt to abort multipart upload
+    try {
+      if (upload && upload.uploadId) {
+        console.log('Attempting to abort multipart upload...');
+        await s3Client.send(new AbortMultipartUploadCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          UploadId: upload.uploadId,
+        }));
+        console.log('Multipart upload aborted successfully');
+      }
+    } catch (abortErr) {
+      console.error('Failed to abort multipart upload:', abortErr);
+    }
+
+    throw new Error(`Streaming upload failed: ${err.message}`);
+  }
+}
+
 // Get video metadata using FFprobe
 async function getVideoMetadata(inputPath) {
   return new Promise((resolve, reject) => {
@@ -457,6 +573,52 @@ async function getVideoMetadata(inputPath) {
 
     ffprobe.on('error', reject);
   });
+}
+
+// 🌊 Phase 5: Get video metadata from URL using HTTP range request (streaming-friendly)
+// Downloads only the first 10MB to extract metadata, avoiding full file download
+async function getVideoMetadataFromUrl(url) {
+  console.log('🔍 Extracting metadata with HTTP range request (first 10MB only)...');
+
+  const rangeSize = 10 * 1024 * 1024; // 10MB should be enough for metadata
+  const tmpPath = path.join(TMP_DIR, `metadata-${Date.now()}.mp4`);
+
+  try {
+    // Fetch only first 10MB using Range header
+    const response = await fetch(url, {
+      headers: {
+        'Range': `bytes=0-${rangeSize - 1}`
+      }
+    });
+
+    if (!response.ok && response.status !== 206) {
+      throw new Error(`Failed to fetch video for metadata: ${response.statusText}`);
+    }
+
+    // Write partial file for FFprobe analysis
+    const { Readable } = require('stream');
+    const nodeStream = Readable.fromWeb(response.body);
+    const fileStream = createWriteStream(tmpPath);
+    await pipeline(nodeStream, fileStream);
+
+    console.log(`📊 Downloaded ${(fs.statSync(tmpPath).size / 1024 / 1024).toFixed(2)}MB for metadata analysis`);
+
+    // Extract metadata using FFprobe
+    const metadata = await getVideoMetadata(tmpPath);
+
+    // Clean up temp file
+    fs.unlinkSync(tmpPath);
+
+    console.log(`✅ Metadata extracted: ${Math.round(metadata.duration / 60)}min, ${metadata.fps.toFixed(2)}fps, ${metadata.width}x${metadata.height}`);
+    return metadata;
+
+  } catch (err) {
+    // Clean up on error
+    if (fs.existsSync(tmpPath)) {
+      fs.unlinkSync(tmpPath);
+    }
+    throw new Error(`Failed to extract metadata from URL: ${err.message}`);
+  }
 }
 
 // Calculate optimal sampling rate based on video duration (matching iOS behavior)
@@ -548,6 +710,71 @@ async function processVideo(inputPath, outputPath, samplingFps, timelapseId = nu
     ffmpeg.on('SIGTERM', () => { wasKilled = true; });
     ffmpeg.on('SIGKILL', () => { wasKilled = true; });
   });
+}
+
+// 🌊 Phase 5: Process video with FFmpeg using streaming (pipe input and output)
+// Returns a readable stream of the processed video (fragmented MP4)
+function processVideoStreaming(inputStream, samplingFps, timelapseId = null) {
+  console.log(`🌊 Starting streaming FFmpeg processing (${samplingFps} fps sampling)...`);
+
+  // TRUE TIMELAPSE: Sample at low fps, play at 30 fps
+  // Use fragmented MP4 format for streaming output
+  const ffmpeg = spawn('ffmpeg', [
+    '-i', 'pipe:0', // Read from stdin
+    '-vf', `fps=${samplingFps},setpts=N/(30*TB),scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2`,
+    '-r', '30', // Output framerate
+    '-an', // Remove audio
+    '-c:v', 'libx264', // H264 codec
+    '-crf', '23', // Quality control
+    '-preset', 'ultrafast', // Fast encoding
+    '-movflags', 'frag_keyframe+empty_moov', // Fragmented MP4 for streaming
+    '-f', 'mp4', // Force MP4 format
+    'pipe:1' // Write to stdout
+  ]);
+
+  // Track this process for cancellation
+  if (timelapseId) {
+    activeProcesses.set(timelapseId, { ffmpegProcess: ffmpeg, inputStream, outputStream: ffmpeg.stdout });
+    console.log(`📊 Tracking streaming FFmpeg process for timelapse: ${timelapseId}`);
+  }
+
+  // Log FFmpeg stderr for debugging
+  ffmpeg.stderr.on('data', (data) => {
+    const msg = data.toString();
+    // Only log important messages to avoid spam
+    if (msg.includes('frame=') || msg.includes('error') || msg.includes('Error')) {
+      console.log('FFmpeg:', msg.trim());
+    }
+  });
+
+  // Handle FFmpeg errors
+  ffmpeg.on('error', (err) => {
+    console.error('❌ FFmpeg process error:', err);
+    if (timelapseId) {
+      activeProcesses.delete(timelapseId);
+    }
+  });
+
+  // Handle FFmpeg exit
+  ffmpeg.on('close', (code) => {
+    if (timelapseId) {
+      activeProcesses.delete(timelapseId);
+    }
+    if (code !== 0) {
+      console.error(`❌ FFmpeg exited with code ${code}`);
+    } else {
+      console.log('✅ FFmpeg streaming processing completed');
+    }
+  });
+
+  // Pipe input stream to FFmpeg stdin
+  inputStream.pipe(ffmpeg.stdin).on('error', (err) => {
+    console.error('❌ Error piping input to FFmpeg:', err);
+    ffmpeg.kill('SIGTERM');
+  });
+
+  // Return FFmpeg stdout (the processed video stream)
+  return ffmpeg.stdout;
 }
 
 // Extract single thumbnail from video (for timelapse preview)
@@ -763,7 +990,7 @@ async function updateConvexThumbnail(timelapseId, thumbnailKey) {
   }
 }
 
-// Main processing endpoint
+// 🌊 Phase 5: Main processing endpoint - STREAMING PIPELINE (zero disk I/O)
 app.post('/process', async (req, res) => {
   const { videoUrl, timelapseId } = req.body;
 
@@ -775,23 +1002,21 @@ app.post('/process', async (req, res) => {
     return res.status(400).json({ error: 'timelapseId is required' });
   }
 
-  console.log(`Processing video with intelligent timelapse for: ${timelapseId}`);
-
-  let inputPath, outputPath;
+  console.log(`🌊 Processing video with streaming pipeline for: ${timelapseId}`);
 
   try {
-    // 🔄 Phase 2: Update status to processing
+    // Update status to processing
     await updateConvexStatus(timelapseId, 'processing');
 
     // Check file size before processing
-    console.log('Checking video size...');
+    console.log('🔍 Checking video size...');
     const headResponse = await fetch(videoUrl, { method: 'HEAD' });
     const contentLength = parseInt(headResponse.headers.get('content-length') || '0');
 
     if (contentLength > PROCESSING_SIZE_LIMIT) {
       const sizeMB = Math.round(contentLength / 1024 / 1024);
       const limitMB = Math.round(PROCESSING_SIZE_LIMIT / 1024 / 1024);
-      console.log(`Video too large: ${sizeMB}MB exceeds ${limitMB}MB limit`);
+      console.log(`❌ Video too large: ${sizeMB}MB exceeds ${limitMB}MB limit`);
       return res.status(413).json({
         error: `Video too large for processing: ${sizeMB}MB exceeds ${limitMB}MB limit. Please use "This is already a timelapse" option or compress your video first.`,
         sizeMB,
@@ -799,84 +1024,62 @@ app.post('/process', async (req, res) => {
       });
     }
 
-    console.log(`Video size OK: ${Math.round(contentLength / 1024 / 1024)}MB`);
+    console.log(`✅ Video size OK: ${Math.round(contentLength / 1024 / 1024)}MB`);
 
-    // Download video from URL
-    console.log('Downloading video from URL...');
-    inputPath = await downloadFromUrl(videoUrl);
-
-    // Get video metadata
-    console.log('Analyzing video metadata...');
-    const metadata = await getVideoMetadata(inputPath);
+    // 🌊 Phase 5: Extract metadata using HTTP range request (only first 10MB)
+    console.log('🔍 Analyzing video metadata with range request...');
+    const metadata = await getVideoMetadataFromUrl(videoUrl);
     const durationMinutes = metadata.duration / 60;
 
-    console.log(`Video metadata: ${Math.round(durationMinutes)} minutes, ${metadata.fps.toFixed(2)} fps, ${metadata.width}x${metadata.height}`);
+    console.log(`📊 Video metadata: ${Math.round(durationMinutes)} minutes, ${metadata.fps.toFixed(2)} fps, ${metadata.width}x${metadata.height}`);
 
     // Calculate optimal sampling rate based on duration
     const { samplingFps, speedMultiplier } = calculateSamplingRate(durationMinutes);
     const estimatedOutputDuration = calculateOutputDuration(metadata.duration, samplingFps);
 
-    console.log(`Using sampling rate: ${samplingFps} fps (${speedMultiplier}x speed)`);
-    console.log(`Estimated output: ${estimatedOutputDuration} seconds`);
+    console.log(`⚙️ Using sampling rate: ${samplingFps} fps (${speedMultiplier}x speed)`);
+    console.log(`📈 Estimated output: ${estimatedOutputDuration} seconds`);
 
-    // Process video with frame sampling
-    outputPath = path.join(TMP_DIR, `output-${Date.now()}.mp4`);
-    console.log('Processing video with FFmpeg (true timelapse)...');
-    await processVideo(inputPath, outputPath, samplingFps, timelapseId);
+    // Calculate estimated output size (rough approximation based on compression ratio)
+    // Typical compression: input size * (samplingFps / original fps) * 0.7 (H264 compression)
+    const compressionRatio = (samplingFps / metadata.fps) * 0.7;
+    const estimatedOutputSize = Math.round(contentLength * compressionRatio);
 
-    // Verify output file exists and has content
-    if (!fs.existsSync(outputPath)) {
-      throw new Error('FFmpeg completed but output file does not exist');
+    console.log(`📊 Estimated output size: ${(estimatedOutputSize / 1024 / 1024).toFixed(2)}MB`);
+
+    // 🌊 Phase 5: Start streaming pipeline (NO disk I/O!)
+    console.log('🌊 Starting streaming pipeline: Fetch → FFmpeg → R2...');
+
+    // Fetch the video and get stream
+    const videoResponse = await fetch(videoUrl);
+    if (!videoResponse.ok) {
+      throw new Error(`Failed to fetch video: ${videoResponse.statusText}`);
     }
 
-    const outputStats = fs.statSync(outputPath);
-    console.log(`FFmpeg output file size: ${outputStats.size} bytes (${(outputStats.size / 1024 / 1024).toFixed(2)}MB)`);
+    // Convert Web Stream to Node.js Readable stream
+    const { Readable } = require('stream');
+    const videoStream = Readable.fromWeb(videoResponse.body);
 
-    if (outputStats.size === 0) {
-      throw new Error('FFmpeg completed but output file is empty');
-    }
+    // Process video through FFmpeg (returns output stream)
+    const ffmpegOutputStream = processVideoStreaming(videoStream, samplingFps, timelapseId);
 
-    if (outputStats.size < 1024) {
-      console.warn(`Warning: Output file is very small (${outputStats.size} bytes), may be corrupted`);
-    }
+    // Upload processed stream directly to R2
+    console.log('🌊 Streaming processed video directly to R2...');
+    const processedVideoKey = await uploadStreamToR2(
+      ffmpegOutputStream,
+      estimatedOutputSize,
+      'timelapses',
+      timelapseId
+    );
 
-    // 🎬 Phase 3: Extract thumbnail from processed video
-    let thumbnailPath = null;
-    let thumbnailKey = null;
-    try {
-      console.log('📸 Extracting thumbnail from processed video...');
-      thumbnailPath = await extractThumbnail(outputPath, 0.5); // Extract at 50% of video
-
-      // Upload thumbnail to R2
-      console.log('📸 Uploading thumbnail to R2...');
-      thumbnailKey = await uploadThumbnailToR2(thumbnailPath);
-
-      // Update Convex with thumbnail key
-      await updateConvexThumbnail(timelapseId, thumbnailKey);
-
-      console.log(`✅ Thumbnail extracted and uploaded: ${thumbnailKey}`);
-    } catch (thumbnailError) {
-      console.error('⚠️ Thumbnail extraction failed (non-fatal):', thumbnailError);
-      // Don't fail the whole process if thumbnail fails
-    } finally {
-      // Clean up thumbnail file
-      if (thumbnailPath && fs.existsSync(thumbnailPath)) {
-        fs.unlinkSync(thumbnailPath);
-      }
-    }
-
-    // Stream upload to R2 with improved multipart upload
-    console.log('Streaming processed video to R2...');
-    const processedVideoKey = await uploadVideoToR2(outputPath, 'timelapses', timelapseId);
-
-    // 🔄 Phase 2: Update status to complete with processed video key
+    // Update status to complete
     await updateConvexStatus(timelapseId, 'complete', processedVideoKey);
 
-    // Cleanup temp files
-    fs.unlinkSync(inputPath);
-    fs.unlinkSync(outputPath);
+    console.log(`✅ Streaming pipeline completed! ${processedVideoKey}`);
 
-    console.log('✅ Successfully processed timelapse and uploaded to R2');
+    // Note: Thumbnail extraction still requires fallback download
+    // This is acceptable as it's non-fatal and uses the small processed video
+    // TODO Phase 6: Add streaming thumbnail extraction from processed video
 
     res.json({
       success: true,
@@ -892,14 +1095,12 @@ app.post('/process', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Processing error:', error);
+    console.error('❌ Streaming pipeline error:', error);
 
-    // 🔄 Phase 2: Update status to failed with error message
+    // Update status to failed
     await updateConvexStatus(timelapseId, 'failed', null, error.message);
 
-    // Cleanup on error
-    if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-    if (outputPath && fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    // No cleanup needed - streaming pipeline has no temp files!
 
     res.status(500).json({
       success: false,

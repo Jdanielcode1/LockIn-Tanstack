@@ -14,7 +14,7 @@ interface VideoUploadProps {
 
 const LARGE_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024 // 5GB
-const PROCESSING_SIZE_LIMIT = 500 * 1024 * 1024 // 500MB - max size for timelapse processing
+const PROCESSING_SIZE_LIMIT = 5 * 1024 * 1024 * 1024 // 5GB - max size for timelapse processing (streaming pipeline)
 
 export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProps) {
   const { user } = useUser()
@@ -407,7 +407,7 @@ export function VideoUpload({ projectId, onComplete, onCancel }: VideoUploadProp
                 <div className="flex-1">
                   <p className="text-sm font-medium text-yellow-500">File too large for processing</p>
                   <p className="text-xs text-[#8b949e] mt-1">
-                    Videos over 500MB cannot be processed into timelapses due to memory constraints. Check "This is already a timelapse" to upload as-is, or compress your video first.
+                    Videos over 5GB cannot be processed into timelapses. Check "This is already a timelapse" to upload as-is, or compress your video first.
                   </p>
                 </div>
               </div>
