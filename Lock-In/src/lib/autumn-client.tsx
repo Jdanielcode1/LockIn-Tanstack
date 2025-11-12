@@ -1,31 +1,25 @@
 /**
- * Autumn Client Setup for React
+ * Autumn Client Setup for React with Convex
  *
- * This file sets up the Autumn provider and hooks for the frontend.
+ * This file sets up the Autumn provider for use with Convex backend.
  */
 
 import { AutumnProvider as AutumnProviderBase } from "autumn-js/react";
 import { type ReactNode } from "react";
+import { useConvex } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 /**
- * Autumn Provider wrapper component.
+ * Autumn Provider wrapper component for Convex.
  *
  * Wrap your app with this to enable Autumn billing hooks and components.
  * This should be placed inside ConvexBetterAuthProvider to have access to auth.
  */
 export function AutumnProvider({ children }: { children: ReactNode }) {
-  // Get the site URL from environment variable
-  // This should point to your Convex backend where the Autumn handler is mounted
-  const siteUrl = import.meta.env.VITE_CONVEX_SITE_URL;
-
-  if (!siteUrl) {
-    console.error(
-      "VITE_CONVEX_SITE_URL is not set. Autumn features may not work correctly.",
-    );
-  }
+  const convex = useConvex();
 
   return (
-    <AutumnProviderBase betterAuthUrl={siteUrl}>
+    <AutumnProviderBase convex={convex} convexApi={(api as any).autumn}>
       {children}
     </AutumnProviderBase>
   );
@@ -34,4 +28,4 @@ export function AutumnProvider({ children }: { children: ReactNode }) {
 /**
  * Re-export Autumn hooks for convenience
  */
-export { useCustomer } from "autumn-js/react";
+export { useCustomer, useEntity } from "autumn-js/react";

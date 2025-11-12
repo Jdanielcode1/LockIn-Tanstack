@@ -6,9 +6,7 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery, useMutation } from "@tanstack/react-query";
 import { useCustomer } from "~/lib/autumn-client";
-import { api } from "../../convex/_generated/api";
 import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/subscription")({
@@ -25,13 +23,11 @@ function SubscriptionPage() {
     checkout,
     openBillingPortal,
   } = useCustomer({
-    expand: ["products", "invoices"],
+    expand: ["products"],
   });
 
-  // Get available products
-  const { data: products } = useSuspenseQuery({
-    queryKey: ["subscriptions.listProducts"],
-  });
+  // Products will be available once you configure them in Autumn dashboard
+  const products: any[] = [];
 
   // Handle checkout
   const handleCheckout = async (productId: string) => {

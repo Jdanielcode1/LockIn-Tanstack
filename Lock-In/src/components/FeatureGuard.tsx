@@ -44,7 +44,8 @@ export function FeatureGuard({
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   // Check if user has access to the feature
-  const hasAccess = customer?.check?.({ featureId })?.allowed ?? false;
+  // Note: This uses client-side check - should be combined with backend verification
+  const hasAccess = (customer as any)?.check?.({ featureId })?.allowed ?? false;
 
   const handleUpgrade = async () => {
     if (!upgradePlan) return;
@@ -126,7 +127,7 @@ export function FeatureGuard({
 export function useFeatureAccess(featureId: string) {
   const { customer, track } = useCustomer();
 
-  const hasAccess = customer?.check?.({ featureId })?.allowed ?? false;
+  const hasAccess = (customer as any)?.check?.({ featureId })?.allowed ?? false;
 
   const trackUsage = async (value?: number) => {
     try {
