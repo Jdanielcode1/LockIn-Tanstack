@@ -207,4 +207,27 @@ export default defineSchema({
     .index("by_club", ["clubId"])
     .index("by_user", ["userId"])
     .index("by_club_and_user", ["clubId", "userId"]),
+
+  // Phase 6: Chunked parallel processing jobs
+  processingJobs: defineTable({
+    timelapseId: v.id("timelapses"),
+    totalChunks: v.number(),
+    chunkSize: v.number(), // Size of each chunk in bytes
+    uploadedChunks: v.array(v.string()), // Array of R2 keys for uploaded chunks
+    processedChunks: v.array(v.string()), // Array of R2 keys for processed chunks
+    status: v.union(
+      v.literal("uploading"),
+      v.literal("processing"),
+      v.literal("stitching"),
+      v.literal("complete"),
+      v.literal("failed")
+    ),
+    finalVideoKey: v.optional(v.string()), // Final stitched video key in R2
+    error: v.optional(v.string()), // Error message if failed
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_timelapse", ["timelapseId"])
+    .index("by_status", ["status"])
+    .index("by_created", ["createdAt"]),
 });

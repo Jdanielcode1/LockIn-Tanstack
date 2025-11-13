@@ -1,9 +1,3 @@
-type PartRequest = {
-  partNumber: number;
-  partStart: number;
-  partEnd: number;
-};
-
 type UploadProgress = {
   loaded: number;
   total: number;
@@ -12,181 +6,279 @@ type UploadProgress = {
   totalParts: number;
 };
 
-export class MultipartUploadManager {
-  private file: File;
-  private actorUrl: string;
-  private uploadId?: string;
-  private key?: string;
-  private onProgress?: (progress: UploadProgress) => void;
-  private completedParts = new Set<number>();
-  private totalParts = 0;
+type UploadedPart = {
+  partNumber: number;
+  etag: string;
+};
 
-  constructor(
-    file: File,
-    actorUrl: string,
-    onProgress?: (progress: UploadProgress) => void
-  ) {
-    this.file = file;
-    this.actorUrl = actorUrl;
-    this.onProgress = onProgress;
+/**
+ * Calculate optimal part size based on file size
+ * Matches backend optimization strategy for consistency
+ */
+function calculateOptimalPartSize(fileSizeBytes: number): number {
+  const fileSizeMB = fileSizeBytes / 1024 / 1024;
+
+  // 5MB minimum for R2 (except last part)
+  if (fileSizeMB < 100) {
+    return 10 * 1024 * 1024; // 10MB for small files
   }
 
-  async initialize(): Promise<{ uploadId: string; key: string }> {
-    const response = await fetch(`${this.actorUrl}/setup`, {
+  if (fileSizeMB <= 500) {
+    return 25 * 1024 * 1024; // 25MB for medium files
+  }
+
+  if (fileSizeMB <= 5000) {
+    return 50 * 1024 * 1024; // 50MB for large files
+  }
+
+  return 100 * 1024 * 1024; // 100MB for very large files (5GB+)
+}
+
+/**
+ * Calculate optimal concurrency based on file size and part size
+ */
+function calculateOptimalConcurrency(fileSize: number, partSize: number): number {
+  const numParts = Math.ceil(fileSize / partSize);
+
+  // Small files: fewer concurrent uploads to avoid overhead
+  if (numParts <= 4) return 2;
+
+  // Medium files: moderate concurrency
+  if (numParts <= 20) return 4;
+
+  // Large files: higher concurrency, but cap at 8 to avoid overwhelming browser
+  return Math.min(8, Math.ceil(numParts / 10));
+}
+
+/**
+ * Sleep utility for retry backoff
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export class MultipartUploadManager {
+  private file: File;
+  private workerUrl: string;
+  private key: string;
+  private uploadId?: string;
+  private onProgress?: (progress: UploadProgress) => void;
+  private completedParts = new Map<number, string>(); // partNumber → etag
+  private totalParts = 0;
+  private partSize: number;
+  private concurrency: number;
+
+  constructor(file: File, workerUrl: string, onProgress?: (progress: UploadProgress) => void) {
+    this.file = file;
+    this.workerUrl = workerUrl;
+    this.onProgress = onProgress;
+
+    // Generate a unique key for this upload
+    const timestamp = Date.now();
+    this.key = `videos/${timestamp}-${file.name}`;
+
+    // Calculate optimal part size and concurrency
+    this.partSize = calculateOptimalPartSize(file.size);
+    this.totalParts = Math.ceil(file.size / this.partSize);
+    this.concurrency = calculateOptimalConcurrency(file.size, this.partSize);
+
+    console.log(`Upload optimization:`, {
+      fileSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+      partSize: `${(this.partSize / 1024 / 1024).toFixed(0)}MB`,
+      totalParts: this.totalParts,
+      concurrency: this.concurrency,
+    });
+  }
+
+  /**
+   * Create multipart upload on the worker
+   */
+  private async createMultipartUpload(): Promise<{ uploadId: string; key: string }> {
+    const response = await fetch(`${this.workerUrl}/${this.key}?action=mpu-create`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileName: this.file.name,
-        fileSize: this.file.size,
-      }),
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to initialize upload: ${response.statusText}`);
+      throw new Error(`Failed to create multipart upload: ${response.statusText}`);
     }
 
     const result = await response.json();
     this.uploadId = result.uploadId;
-    this.key = result.key;
 
     return result;
   }
 
-  async getMissingParts(): Promise<PartRequest[]> {
-    const response = await fetch(`${this.actorUrl}/missing`);
+  /**
+   * Upload a single part with retry logic
+   */
+  private async uploadPart(partNumber: number): Promise<void> {
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+
+    // Calculate part boundaries
+    const start = (partNumber - 1) * this.partSize;
+    const end = Math.min(start + this.partSize, this.file.size);
+    const chunk = this.file.slice(start, end);
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await fetch(
+          `${this.workerUrl}/${this.key}?action=mpu-uploadpart&uploadId=${this.uploadId}&partNumber=${partNumber}`,
+          {
+            method: 'PUT',
+            body: chunk,
+            keepalive: true,
+            cache: 'no-store',
+            signal: AbortSignal.timeout(120000), // 2 minute timeout per part
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
+
+        const result: UploadedPart = await response.json();
+
+        // Store the etag for this part
+        this.completedParts.set(result.partNumber, result.etag);
+
+        // Report progress
+        if (this.onProgress) {
+          const loaded = this.completedParts.size * this.partSize;
+
+          this.onProgress({
+            loaded: Math.min(loaded, this.file.size),
+            total: this.file.size,
+            percentage: Math.round((this.completedParts.size / this.totalParts) * 100),
+            completedParts: this.completedParts.size,
+            totalParts: this.totalParts,
+          });
+        }
+
+        return; // Success, exit retry loop
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`Part ${partNumber} upload attempt ${attempt + 1} failed:`, error);
+
+        if (attempt < maxRetries - 1) {
+          // Exponential backoff: 1s, 2s, 4s
+          const delay = Math.pow(2, attempt) * 1000;
+          await sleep(delay);
+        }
+      }
+    }
+
+    throw new Error(
+      `Part ${partNumber} failed after ${maxRetries} attempts: ${lastError?.message}`
+    );
+  }
+
+  /**
+   * Complete the multipart upload
+   */
+  private async completeMultipartUpload(): Promise<{ key: string; etag: string }> {
+    // Sort parts by part number and format for R2
+    const parts = Array.from(this.completedParts.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([partNumber, etag]) => ({ partNumber, etag }));
+
+    const response = await fetch(
+      `${this.workerUrl}/${this.key}?action=mpu-complete&uploadId=${this.uploadId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parts }),
+      }
+    );
 
     if (!response.ok) {
-      throw new Error(`Failed to get missing parts: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Failed to complete upload: ${errorText}`);
     }
 
     const result = await response.json();
-    this.totalParts = result.missingParts.length + this.completedParts.size;
 
-    return result.missingParts;
+    return {
+      key: result.key,
+      etag: result.etag,
+    };
   }
 
-  private async uploadPart(partRequest: PartRequest): Promise<void> {
-    const { partNumber, partStart, partEnd } = partRequest;
+  /**
+   * Upload the file with optimized concurrency
+   */
+  async upload(): Promise<{ key: string; etag: string }> {
+    // Step 1: Create multipart upload
+    await this.createMultipartUpload();
 
-    // Extract the chunk from the file
-    const chunk = this.file.slice(partStart, partEnd);
-
-    // Upload the chunk
-    const response = await fetch(`${this.actorUrl}/part/${partNumber}`, {
-      method: 'PATCH',
-      body: chunk,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to upload part ${partNumber}: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-
-    // Track completed part
-    this.completedParts.add(partNumber);
-
-    // Report progress
-    if (this.onProgress) {
-      const loaded = Array.from(this.completedParts).reduce((sum, pn) => {
-        // Calculate approximate loaded bytes
-        return sum + Math.min(10 * 1024 * 1024, this.file.size - (pn - 1) * 10 * 1024 * 1024);
-      }, 0);
-
-      this.onProgress({
-        loaded,
-        total: this.file.size,
-        percentage: Math.round((this.completedParts.size / this.totalParts) * 100),
-        completedParts: this.completedParts.size,
-        totalParts: this.totalParts,
-      });
-    }
-
-    return result;
-  }
-
-  async upload(concurrency: number = 5): Promise<{ key: string; etag: string }> {
-    // Initialize the upload
-    await this.initialize();
-
-    // Get missing parts
-    const missingParts = await this.getMissingParts();
-
-    if (missingParts.length === 0) {
-      throw new Error('No parts to upload');
-    }
-
-    // Upload parts in parallel with controlled concurrency
-    const uploadPromises: Promise<void>[] = [];
+    // Step 2: Upload all parts with controlled concurrency
+    const partNumbers = Array.from({ length: this.totalParts }, (_, i) => i + 1);
     let currentIndex = 0;
 
     const uploadNext = async (): Promise<void> => {
-      while (currentIndex < missingParts.length) {
-        const partRequest = missingParts[currentIndex++];
-        await this.uploadPart(partRequest);
+      while (currentIndex < partNumbers.length) {
+        const partNumber = partNumbers[currentIndex++];
+        await this.uploadPart(partNumber);
       }
     };
 
     // Start concurrent upload workers
-    for (let i = 0; i < Math.min(concurrency, missingParts.length); i++) {
-      uploadPromises.push(uploadNext());
-    }
+    const workers = Array.from({ length: Math.min(this.concurrency, this.totalParts) }, () =>
+      uploadNext()
+    );
 
-    // Wait for all uploads to complete
-    await Promise.all(uploadPromises);
+    await Promise.all(workers);
 
-    // Get final status to retrieve etag
-    const statusResponse = await fetch(`${this.actorUrl}/status`);
-    if (!statusResponse.ok) {
-      throw new Error('Upload completed but failed to get status');
-    }
+    // Step 3: Complete the upload
+    const result = await this.completeMultipartUpload();
 
-    const status = await statusResponse.json();
+    console.log(`Upload completed: ${result.key}`);
 
-    return {
-      key: this.key!,
-      etag: status.etag || '',
-    };
+    return result;
   }
 
+  /**
+   * Abort the multipart upload
+   */
   async abort(): Promise<void> {
-    await fetch(`${this.actorUrl}/abort`, {
-      method: 'DELETE',
-    });
-  }
-
-  async resume(): Promise<{ key: string; etag: string }> {
-    // Get missing parts and continue upload
-    const missingParts = await this.getMissingParts();
-
-    if (missingParts.length === 0) {
-      // Already complete
-      const statusResponse = await fetch(`${this.actorUrl}/status`);
-      const status = await statusResponse.json();
-      return {
-        key: this.key!,
-        etag: status.etag || '',
-      };
+    if (!this.uploadId) {
+      return;
     }
 
-    // Continue uploading remaining parts
-    return this.upload();
+    try {
+      await fetch(
+        `${this.workerUrl}/${this.key}?action=mpu-abort&uploadId=${this.uploadId}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      console.log(`Aborted upload: ${this.key}`);
+    } catch (error) {
+      console.error('Error aborting upload:', error);
+    }
   }
 }
 
+/**
+ * Simplified helper function for uploading large files
+ */
 export async function uploadLargeFile(
   file: File,
-  actorBaseUrl: string,
+  workerUrl: string,
   uploaderId: string,
   onProgress?: (progress: UploadProgress) => void
 ): Promise<{ key: string; etag: string }> {
-  const actorUrl = `${actorBaseUrl}/${uploaderId}`;
-  const manager = new MultipartUploadManager(file, actorUrl, onProgress);
+  // Note: uploaderId is no longer needed with the new stateless design,
+  // but we keep it for backward compatibility
+  const manager = new MultipartUploadManager(file, workerUrl, onProgress);
 
   try {
-    return await manager.upload(5);
+    return await manager.upload();
   } catch (error) {
     console.error('Upload failed:', error);
+    // Attempt to abort the upload
+    await manager.abort();
     throw error;
   }
 }

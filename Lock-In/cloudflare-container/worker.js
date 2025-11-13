@@ -404,6 +404,119 @@ export default {
       }
     }
 
+    // 🔶 Phase 6: Process single chunk endpoint (parallel processing)
+    if (url.pathname === '/process-chunk' && request.method === 'POST') {
+      try {
+        const { chunkKey, chunkIndex, jobId, samplingFps } = await request.json();
+
+        if (!chunkKey || chunkIndex === undefined || !jobId || !samplingFps) {
+          return new Response(
+            JSON.stringify({ error: 'chunkKey, chunkIndex, jobId, and samplingFps are required' }),
+            { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+
+        console.log(`🔶 Worker: Processing chunk ${chunkIndex} for job ${jobId}`);
+
+        // Get signed URL for chunk from R2
+        const chunkUrl = await getVideoUrl(env, chunkKey);
+        console.log(`Got signed URL for chunk ${chunkIndex}`);
+
+        // 🔶 Phase 6: Use unique Durable Object per chunk for parallel processing
+        // This enables multiple chunks to be processed simultaneously across different containers
+        const id = env.VIDEO_PROCESSOR.idFromName(`chunk-${jobId}-${chunkIndex}`);
+        const stub = env.VIDEO_PROCESSOR.get(id);
+        console.log(`Using Durable Object instance: chunk-${jobId}-${chunkIndex}`);
+
+        // Forward to container with 10 minute timeout (chunks are smaller, but allow buffer)
+        const containerResponse = await fetchWithTimeout(
+          stub.fetch(
+            new Request('http://container/process-chunk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chunkUrl, chunkIndex, jobId, samplingFps }),
+            })
+          ),
+          10 * 60 * 1000, // 10 minutes
+          `Chunk ${chunkIndex} processing timed out after 10 minutes`
+        );
+
+        if (!containerResponse.ok) {
+          const errorText = await containerResponse.text();
+          throw new Error(`Chunk ${chunkIndex} processing failed: ${errorText}`);
+        }
+
+        const result = await containerResponse.json();
+        console.log(`✅ Chunk ${chunkIndex} processed successfully: ${result.processedKey}`);
+
+        return new Response(
+          JSON.stringify(result),
+          { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+
+      } catch (error) {
+        console.error('Chunk processing error:', error);
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+    }
+
+    // 🔶 Phase 6: Stitch chunks endpoint (called by Convex after all chunks are processed)
+    if (url.pathname === '/stitch' && request.method === 'POST') {
+      try {
+        const { jobId, processedChunkKeys } = await request.json();
+
+        if (!jobId || !processedChunkKeys || !Array.isArray(processedChunkKeys)) {
+          return new Response(
+            JSON.stringify({ error: 'jobId and processedChunkKeys (array) are required' }),
+            { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+
+        console.log(`🔶 Worker: Stitching ${processedChunkKeys.length} chunks for job ${jobId}`);
+
+        // Use a single Durable Object for stitching (not parallelized)
+        const id = env.VIDEO_PROCESSOR.idFromName(`stitch-${jobId}`);
+        const stub = env.VIDEO_PROCESSOR.get(id);
+        console.log(`Using Durable Object instance: stitch-${jobId}`);
+
+        // Forward to container with 15 minute timeout (stitching can take time for large videos)
+        const containerResponse = await fetchWithTimeout(
+          stub.fetch(
+            new Request('http://container/stitch-chunks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ jobId, processedChunkKeys }),
+            })
+          ),
+          15 * 60 * 1000, // 15 minutes
+          `Stitching timed out after 15 minutes`
+        );
+
+        if (!containerResponse.ok) {
+          const errorText = await containerResponse.text();
+          throw new Error(`Stitching failed: ${errorText}`);
+        }
+
+        const result = await containerResponse.json();
+        console.log(`✅ Stitching completed successfully: ${result.finalVideoKey}`);
+
+        return new Response(
+          JSON.stringify(result),
+          { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+
+      } catch (error) {
+        console.error('Stitching error:', error);
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+    }
+
     // License acceptance endpoint
     if (url.pathname === '/accept-ai-license' && request.method === 'POST') {
       try {

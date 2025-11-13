@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useSuspenseQuery, useQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useMutation } from 'convex/react'
@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import type { Id } from '../../convex/_generated/dataModel'
 import { VideoPlayer } from '../components/VideoPlayer'
 import { useUser } from '../components/UserProvider'
+import { DeleteConfirmationModal } from '../components/DeleteConfirmationModal'
 
 export const Route = createFileRoute('/_authenticated/timelapse/$timelapseId')({
   component: TimelapseDetail,
@@ -14,9 +15,11 @@ export const Route = createFileRoute('/_authenticated/timelapse/$timelapseId')({
 
 function TimelapseDetail() {
   const { user } = useUser()
+  const navigate = useNavigate()
   const { timelapseId } = Route.useParams()
   const [commentsCursor, setCommentsCursor] = useState<string | null>(null)
   const [newComment, setNewComment] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const { data: timelapse } = useSuspenseQuery(
     convexQuery(api.timelapses.get, {
@@ -42,6 +45,7 @@ function TimelapseDetail() {
   const incrementView = useMutation(api.timelapses.incrementViewCount)
   const toggleLike = useMutation(api.social.toggleLike)
   const addComment = useMutation(api.social.addComment)
+  const deleteTimelapse = useMutation(api.timelapses.deleteTimelapse)
 
   useEffect(() => {
     incrementView({ timelapseId: timelapseId as Id<'timelapses'> })
@@ -93,18 +97,45 @@ function TimelapseDetail() {
     setNewComment('')
   }
 
+  const handleDelete = async () => {
+    await deleteTimelapse({
+      timelapseId: timelapseId as Id<'timelapses'>,
+    })
+    // Redirect to project page after deletion
+    navigate({
+      to: '/projects/$projectId',
+      params: { projectId: timelapse!.projectId },
+    })
+  }
+
+  // Check if current user is the owner
+  const isOwner = user && timelapse && user._id === timelapse.userId
+
   return (
     <main className="min-h-screen bg-[#0d1117]">
       <div className="container mx-auto px-4 py-8 max-w-[1280px]">
-        <Link
-          to="/"
-          className="text-[#58a6ff] hover:underline mb-6 inline-flex items-center gap-2 text-sm"
-        >
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-            <path fillRule="evenodd" d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"/>
-          </svg>
-          Back to Feed
-        </Link>
+        <div className="flex items-center justify-between mb-6">
+          <Link
+            to="/"
+            className="text-[#58a6ff] hover:underline inline-flex items-center gap-2 text-sm"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+              <path fillRule="evenodd" d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"/>
+            </svg>
+            Back to Feed
+          </Link>
+          {isOwner && (
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-600/10 border border-red-600/20 text-red-400 rounded-md hover:bg-red-600/20 transition text-sm font-medium"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/>
+              </svg>
+              Delete
+            </button>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
@@ -306,6 +337,16 @@ function TimelapseDetail() {
           </div>
         </div>
       </div>
+
+      {showDeleteModal && (
+        <DeleteConfirmationModal
+          title="Delete Timelapse"
+          message="Are you sure you want to delete this timelapse? This action cannot be undone and will permanently remove the video and all associated data."
+          onConfirm={handleDelete}
+          onClose={() => setShowDeleteModal(false)}
+          confirmButtonText="Delete Timelapse"
+        />
+      )}
     </main>
   )
 }

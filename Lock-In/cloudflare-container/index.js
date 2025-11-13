@@ -778,8 +778,9 @@ function processVideoStreaming(inputStream, samplingFps, timelapseId = null) {
 }
 
 // Extract single thumbnail from video (for timelapse preview)
-async function extractThumbnail(inputPath, timestamp = 0.5) {
-  console.log(`Extracting thumbnail at ${timestamp * 100}% of video`);
+// Now extracts from the start of the video (0.5 seconds in to avoid black frames)
+async function extractThumbnail(inputPath, timestamp = 0.01) {
+  console.log(`Extracting thumbnail at ${timestamp * 100}% of video (start)`);
 
   const outputPath = path.join(TMP_DIR, `thumbnail-${Date.now()}.jpg`);
 
@@ -840,8 +841,9 @@ async function extractThumbnail(inputPath, timestamp = 0.5) {
 }
 
 // Extract frames from video at different timestamps
-async function extractFrames(inputPath, timestamps = [0.25, 0.5, 0.75]) {
-  console.log('Extracting frames at timestamps:', timestamps);
+// Now extracts from early in the video to capture the start
+async function extractFrames(inputPath, timestamps = [0.01, 0.05, 0.10]) {
+  console.log('Extracting frames at timestamps (from start):', timestamps);
 
   // First, get video duration
   const duration = await new Promise((resolve, reject) => {
@@ -1255,10 +1257,280 @@ app.delete('/process/:timelapseId', async (req, res) => {
   });
 });
 
+// 🔶 Phase 6: Process single chunk endpoint for parallel processing
+app.post('/process-chunk', async (req, res) => {
+  const { chunkUrl, chunkIndex, jobId, samplingFps } = req.body;
+
+  if (!chunkUrl || chunkIndex === undefined || !jobId || !samplingFps) {
+    return res.status(400).json({
+      error: 'chunkUrl, chunkIndex, jobId, and samplingFps are required'
+    });
+  }
+
+  console.log(`🔶 Processing chunk ${chunkIndex} for job ${jobId} (${samplingFps} fps sampling)`);
+
+  let inputPath;
+  let outputPath;
+
+  try {
+    // Download chunk from R2
+    console.log(`⬇️ Downloading chunk ${chunkIndex}...`);
+    inputPath = await downloadFromUrl(chunkUrl);
+
+    const inputStats = fs.statSync(inputPath);
+    console.log(`✅ Chunk ${chunkIndex} downloaded: ${(inputStats.size / 1024 / 1024).toFixed(2)}MB`);
+
+    // Process chunk with FFmpeg
+    console.log(`⚙️ Processing chunk ${chunkIndex} with timelapse algorithm...`);
+    outputPath = path.join(TMP_DIR, `processed-chunk-${jobId}-${chunkIndex}-${Date.now()}.mp4`);
+
+    await processVideo(inputPath, outputPath, samplingFps);
+
+    const outputStats = fs.statSync(outputPath);
+    console.log(`✅ Chunk ${chunkIndex} processed: ${(outputStats.size / 1024 / 1024).toFixed(2)}MB`);
+
+    // Upload processed chunk to R2
+    console.log(`⬆️ Uploading processed chunk ${chunkIndex} to R2...`);
+    const processedKey = await uploadVideoToR2(outputPath, `processed-chunks/${jobId}`);
+
+    console.log(`✅ Chunk ${chunkIndex} uploaded to R2: ${processedKey}`);
+
+    // Clean up temp files
+    if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+
+    // Call Convex mutation to mark chunk as processed
+    const convexUrl = process.env.CONVEX_URL;
+    if (convexUrl) {
+      console.log(`📡 Notifying Convex that chunk ${chunkIndex} is complete...`);
+
+      const response = await fetch(`${convexUrl}/markChunkProcessed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          chunkIndex,
+          processedKey,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to update Convex:', errorText);
+      } else {
+        console.log(`✅ Convex updated for chunk ${chunkIndex}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      chunkIndex,
+      processedKey,
+      inputSize: inputStats.size,
+      outputSize: outputStats.size,
+    });
+
+  } catch (error) {
+    console.error(`❌ Chunk ${chunkIndex} processing error:`, error);
+
+    // Clean up temp files on error
+    try {
+      if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+      if (outputPath && fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    } catch (cleanupErr) {
+      console.error('Cleanup error:', cleanupErr);
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      chunkIndex,
+    });
+  }
+});
+
+// 🔶 Phase 6: Stitch processed chunks into final video
+app.post('/stitch-chunks', async (req, res) => {
+  const { jobId, processedChunkKeys } = req.body;
+
+  if (!jobId || !processedChunkKeys || !Array.isArray(processedChunkKeys)) {
+    return res.status(400).json({
+      error: 'jobId and processedChunkKeys (array) are required'
+    });
+  }
+
+  console.log(`🔶 Stitching ${processedChunkKeys.length} chunks for job ${jobId}`);
+
+  const chunkPaths = [];
+  const concatListPath = path.join(TMP_DIR, `concat-list-${jobId}-${Date.now()}.txt`);
+  let finalOutputPath;
+
+  try {
+    // Download all processed chunks from R2
+    console.log(`⬇️ Downloading ${processedChunkKeys.length} processed chunks...`);
+
+    for (let i = 0; i < processedChunkKeys.length; i++) {
+      const chunkKey = processedChunkKeys[i];
+
+      // Generate signed URL for chunk
+      const chunkUrl = await getSignedUrl(chunkKey);
+
+      // Download chunk
+      const chunkPath = path.join(TMP_DIR, `stitch-chunk-${jobId}-${i}.mp4`);
+      const response = await fetch(chunkUrl);
+
+      if (!response.ok) {
+        throw new Error(`Failed to download chunk ${i}: ${response.statusText}`);
+      }
+
+      const { Readable } = require('stream');
+      const nodeStream = Readable.fromWeb(response.body);
+      const fileStream = createWriteStream(chunkPath);
+      await pipeline(nodeStream, fileStream);
+
+      chunkPaths.push(chunkPath);
+      console.log(`✅ Downloaded chunk ${i}/${processedChunkKeys.length}`);
+    }
+
+    // Create concat list file for FFmpeg
+    console.log('📝 Creating FFmpeg concat list...');
+    const concatList = chunkPaths.map(p => `file '${p}'`).join('\n');
+    fs.writeFileSync(concatListPath, concatList);
+
+    // Stitch chunks using FFmpeg concat demuxer (no re-encoding!)
+    console.log('🎬 Stitching chunks with FFmpeg concat demuxer...');
+    finalOutputPath = path.join(TMP_DIR, `final-${jobId}-${Date.now()}.mp4`);
+
+    await new Promise((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', [
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', concatListPath,
+        '-c', 'copy', // Copy streams without re-encoding (fast!)
+        '-movflags', '+faststart', // Web optimized
+        '-y',
+        finalOutputPath
+      ]);
+
+      let stderr = '';
+      ffmpeg.stderr.on('data', (data) => {
+        stderr += data.toString();
+        console.log('FFmpeg:', data.toString());
+      });
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          console.log('✅ Stitching completed successfully');
+          resolve();
+        } else {
+          reject(new Error(`FFmpeg stitching failed with code ${code}: ${stderr}`));
+        }
+      });
+
+      ffmpeg.on('error', reject);
+    });
+
+    const finalStats = fs.statSync(finalOutputPath);
+    console.log(`✅ Final video created: ${(finalStats.size / 1024 / 1024).toFixed(2)}MB`);
+
+    // Upload final video to R2
+    console.log('⬆️ Uploading final video to R2...');
+    const finalVideoKey = await uploadVideoToR2(finalOutputPath, 'timelapses');
+
+    console.log(`✅ Final video uploaded: ${finalVideoKey}`);
+
+    // Clean up temp files
+    console.log('🧹 Cleaning up temporary files...');
+    chunkPaths.forEach(p => {
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    });
+    if (fs.existsSync(concatListPath)) fs.unlinkSync(concatListPath);
+    if (fs.existsSync(finalOutputPath)) fs.unlinkSync(finalOutputPath);
+
+    // Call Convex mutation to mark job as complete
+    const convexUrl = process.env.CONVEX_URL;
+    if (convexUrl) {
+      console.log('📡 Notifying Convex that job is complete...');
+
+      const response = await fetch(`${convexUrl}/markJobComplete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          finalVideoKey,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to update Convex:', errorText);
+      } else {
+        console.log('✅ Convex updated - job marked complete');
+      }
+    }
+
+    res.json({
+      success: true,
+      finalVideoKey,
+      finalSize: finalStats.size,
+      chunksProcessed: processedChunkKeys.length,
+    });
+
+  } catch (error) {
+    console.error('❌ Stitching error:', error);
+
+    // Clean up temp files on error
+    try {
+      chunkPaths.forEach(p => {
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      });
+      if (fs.existsSync(concatListPath)) fs.unlinkSync(concatListPath);
+      if (finalOutputPath && fs.existsSync(finalOutputPath)) fs.unlinkSync(finalOutputPath);
+    } catch (cleanupErr) {
+      console.error('Cleanup error:', cleanupErr);
+    }
+
+    // Call Convex to mark job as failed
+    const convexUrl = process.env.CONVEX_URL;
+    if (convexUrl) {
+      try {
+        await fetch(`${convexUrl}/markJobFailed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId,
+            error: error.message,
+          }),
+        });
+      } catch (convexErr) {
+        console.error('Failed to notify Convex of error:', convexErr);
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Helper function to get signed URL for R2 object
+async function getSignedUrl(key) {
+  const { getSignedUrl: awsGetSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+
+  const signedUrl = await awsGetSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 hour
+  return signedUrl;
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
+  res.json({
+    status: 'healthy',
     ffmpeg: 'available',
     activeProcesses: activeProcesses.size,
     activeUploads: activeUploads.size,

@@ -312,10 +312,53 @@ export const deleteTimelapse = mutation({
     const timelapse = await ctx.db.get(args.timelapseId);
     if (!timelapse) return null;
 
-    // Delete from R2
+    // Authorization: Only the timelapse owner can delete it
+    const userId = await getAuthUserId(ctx);
+    if (timelapse.userId !== userId) {
+      throw new Error("You can only delete your own timelapses");
+    }
+
+    // Delete all R2 video files
     await r2.deleteObject(ctx, timelapse.videoKey);
     if (timelapse.thumbnailKey) {
       await r2.deleteObject(ctx, timelapse.thumbnailKey);
+    }
+    // Delete original video if different from main video
+    if (
+      timelapse.originalVideoKey &&
+      timelapse.originalVideoKey !== timelapse.videoKey
+    ) {
+      await r2.deleteObject(ctx, timelapse.originalVideoKey);
+    }
+    // Delete processed video if different from main video
+    if (
+      timelapse.processedVideoKey &&
+      timelapse.processedVideoKey !== timelapse.videoKey
+    ) {
+      await r2.deleteObject(ctx, timelapse.processedVideoKey);
+    }
+
+    // Clean up processing job chunks (if exists)
+    const job = await ctx.db
+      .query("processingJobs")
+      .withIndex("by_timelapse", (q) => q.eq("timelapseId", args.timelapseId))
+      .first();
+
+    if (job) {
+      // Delete all uploaded chunks
+      for (const chunkKey of job.uploadedChunks.filter(Boolean)) {
+        await r2.deleteObject(ctx, chunkKey);
+      }
+      // Delete all processed chunks
+      for (const chunkKey of job.processedChunks.filter(Boolean)) {
+        await r2.deleteObject(ctx, chunkKey);
+      }
+      // Delete final video if different from main videoKey
+      if (job.finalVideoKey && job.finalVideoKey !== timelapse.videoKey) {
+        await r2.deleteObject(ctx, job.finalVideoKey);
+      }
+      // Delete processing job record
+      await ctx.db.delete(job._id);
     }
 
     // Delete likes

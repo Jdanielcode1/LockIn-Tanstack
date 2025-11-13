@@ -10,7 +10,7 @@ enabled = true
 [[containers]]
 class_name = "VideoProcessor"
 image = "./Dockerfile"
-max_instances = 10
+max_instances = 100  # Support up to 100 parallel chunk processing containers
 
 [[durable_objects.bindings]]
 class_name = "VideoProcessor"

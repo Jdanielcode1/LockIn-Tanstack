@@ -20,6 +20,7 @@ import type * as http from "../http.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as lockInSessions from "../lockInSessions.js";
 import type * as openaiRealtime from "../openaiRealtime.js";
+import type * as processingJobs from "../processingJobs.js";
 import type * as projects from "../projects.js";
 import type * as r2 from "../r2.js";
 import type * as realtimeActions from "../realtimeActions.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   leaderboard: typeof leaderboard;
   lockInSessions: typeof lockInSessions;
   openaiRealtime: typeof openaiRealtime;
+  processingJobs: typeof processingJobs;
   projects: typeof projects;
   r2: typeof r2;
   realtimeActions: typeof realtimeActions;
