@@ -25,8 +25,12 @@ interface ClaudeMessage {
   content: string;
   timestamp: number;
   userId?: string;
-  imageBase64?: string; // Base64-encoded JPEG image for vision API
+  // For images - uses vision API
+  imageBase64?: string;
   imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  // For PDFs - uses document API
+  documentBase64?: string;
+  documentMediaType?: 'application/pdf';
 }
 
 interface BashTool {
@@ -261,7 +265,7 @@ export class ClaudeSandbox implements DurableObject {
         const data = JSON.parse(event.data as string);
 
         if (data.type === 'command') {
-          await this.executeCommand(data.content, data.userId, data.imageBase64, data.imageMediaType);
+          await this.executeCommand(data.content, data.userId, data.imageBase64, data.imageMediaType, data.documentBase64, data.documentMediaType);
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
@@ -431,7 +435,14 @@ if result.returncode != 0:
     });
   }
 
-  private async executeCommand(command: string, userId?: string, imageBase64?: string, imageMediaType?: string): Promise<any> {
+  private async executeCommand(
+    command: string,
+    userId?: string,
+    imageBase64?: string,
+    imageMediaType?: string,
+    documentBase64?: string,
+    documentMediaType?: string
+  ): Promise<any> {
     // Add command to history
     const commandMessage: ClaudeMessage = {
       type: 'command',
@@ -439,7 +450,9 @@ if result.returncode != 0:
       timestamp: Date.now(),
       userId,
       imageBase64,
-      imageMediaType: imageMediaType as any
+      imageMediaType: imageMediaType as any,
+      documentBase64,
+      documentMediaType: documentMediaType as any
     };
     this.commandHistory.push(commandMessage);
     this.broadcast(commandMessage);
@@ -457,7 +470,7 @@ if result.returncode != 0:
 
     try {
       // Use Claude with custom tools
-      const claudeResponse = await this.callClaudeWithTools(command, imageBase64, imageMediaType);
+      const claudeResponse = await this.callClaudeWithTools(command, imageBase64, imageMediaType, documentBase64, documentMediaType);
 
       return {
         success: true,
@@ -480,21 +493,42 @@ if result.returncode != 0:
     }
   }
 
-  private async callClaudeWithTools(userCommand: string, imageBase64?: string, imageMediaType?: string): Promise<string> {
+  private async callClaudeWithTools(
+    userCommand: string,
+    imageBase64?: string,
+    imageMediaType?: string,
+    documentBase64?: string,
+    documentMediaType?: string
+  ): Promise<string> {
     try {
       let fullResponse = '';
       const conversationHistory: Anthropic.MessageParam[] = [];
 
-      // Add user message with optional image
-      if (imageBase64 && imageMediaType) {
-        // Message with image (vision API)
+      // Add user message with optional image or document
+      if (documentBase64 && documentMediaType) {
+        // Message with PDF document
         conversationHistory.push({
           role: 'user',
           content: [
             {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: documentBase64
+              }
+            },
+            {
               type: 'text',
               text: userCommand
-            },
+            }
+          ]
+        });
+      } else if (imageBase64 && imageMediaType) {
+        // Message with image (vision API)
+        conversationHistory.push({
+          role: 'user',
+          content: [
             {
               type: 'image',
               source: {
@@ -502,6 +536,10 @@ if result.returncode != 0:
                 media_type: imageMediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
                 data: imageBase64
               }
+            },
+            {
+              type: 'text',
+              text: userCommand
             }
           ]
         });

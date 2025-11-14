@@ -3,7 +3,13 @@ import type { ClaudeMessage } from '~/types/claude';
 
 interface ClaudeSandboxHook {
   messages: ClaudeMessage[];
-  sendCommand: (command: string, imageBase64?: string, imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') => void;
+  sendCommand: (
+    command: string,
+    imageBase64?: string,
+    imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+    documentBase64?: string,
+    documentMediaType?: 'application/pdf'
+  ) => void;
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
@@ -138,7 +144,13 @@ export function useClaudeSandbox(
   }, []);
 
   const sendCommand = useCallback(
-    (command: string, imageBase64?: string, imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') => {
+    (
+      command: string,
+      imageBase64?: string,
+      imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+      documentBase64?: string,
+      documentMediaType?: 'application/pdf'
+    ) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         setError('Not connected to sandbox');
         return;
@@ -153,9 +165,20 @@ export function useClaudeSandbox(
           type: 'command',
           content: command,
           userId,
-          imageBase64,
-          imageMediaType: imageMediaType || 'image/jpeg',
+          timestamp: Date.now(),
         };
+
+        // Add image data if present
+        if (imageBase64) {
+          message.imageBase64 = imageBase64;
+          message.imageMediaType = imageMediaType || 'image/jpeg';
+        }
+
+        // Add document data if present
+        if (documentBase64) {
+          message.documentBase64 = documentBase64;
+          message.documentMediaType = documentMediaType || 'application/pdf';
+        }
 
         wsRef.current.send(JSON.stringify(message));
         setError(null);

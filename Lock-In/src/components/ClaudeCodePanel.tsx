@@ -27,8 +27,14 @@ export function ClaudeCodePanel({
 }: ClaudeCodePanelProps) {
   const [commandInput, setCommandInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
+  const [attachedFile, setAttachedFile] = useState<{
+    file: File;
+    base64: string;
+    mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'application/pdf';
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // WebSocket connection
   const { messages, sendCommand, isConnected, isConnecting, error, reconnect } =
@@ -72,12 +78,24 @@ export function ClaudeCodePanel({
 
   // Handle command submission
   const handleSendCommand = () => {
-    if (!commandInput.trim() || !isConnected) {
+    if ((!commandInput.trim() && !attachedFile) || !isConnected) {
       return;
     }
 
-    sendCommand(commandInput.trim());
+    // Determine if file is image or PDF
+    const isPDF = attachedFile?.mediaType === 'application/pdf';
+
+    // Send command with optional file attachment
+    sendCommand(
+      commandInput.trim() || '(file attached)',
+      isPDF ? undefined : attachedFile?.base64,
+      isPDF ? undefined : (attachedFile?.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'),
+      isPDF ? attachedFile?.base64 : undefined,
+      isPDF ? 'application/pdf' : undefined
+    );
+
     setCommandInput('');
+    setAttachedFile(null);
 
     // Reset textarea height
     if (textareaRef.current) {
@@ -101,6 +119,52 @@ export function ClaudeCodePanel({
     // Auto-resize
     e.target.style.height = 'auto';
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+  };
+
+  // Handle file selection
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      alert('Please select a valid image (JPEG, PNG, GIF, WebP) or PDF file');
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      setAttachedFile({
+        file,
+        base64,
+        mediaType: file.type as any,
+      });
+    };
+    reader.readAsDataURL(file);
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Handle file removal
+  const handleRemoveFile = () => {
+    setAttachedFile(null);
+  };
+
+  // Handle paperclip button click
+  const handleAttachClick = () => {
+    fileInputRef.current?.click();
   };
 
   if (!sandboxEnabled) {
@@ -244,6 +308,37 @@ export function ClaudeCodePanel({
 
               {/* Command Input */}
               <div className="space-y-2">
+                {/* File Preview */}
+                {attachedFile && (
+                  <div className="flex items-center gap-2 p-2 bg-gray-700/50 rounded-lg border border-gray-600">
+                    <svg className="w-4 h-4 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-200 truncate">{attachedFile.file.name}</p>
+                      <p className="text-xs text-gray-400">{(attachedFile.file.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <button
+                      onClick={handleRemoveFile}
+                      className="p-1 hover:bg-gray-600 rounded transition-colors"
+                      title="Remove attachment"
+                    >
+                      <svg className="w-4 h-4 text-gray-400 hover:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
                 <textarea
                   ref={textareaRef}
                   value={commandInput}
@@ -261,6 +356,18 @@ export function ClaudeCodePanel({
                   </span>
 
                   <div className="flex gap-2">
+                    {/* Paperclip button for file attachment */}
+                    <button
+                      onClick={handleAttachClick}
+                      disabled={!isConnected}
+                      className="p-1.5 hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Attach image or PDF"
+                    >
+                      <svg className="w-5 h-5 text-gray-400 hover:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                    </button>
+
                     {(isCreator || isModerator) && (
                       <button
                         onClick={() => destroyMutation.mutate()}
@@ -273,7 +380,7 @@ export function ClaudeCodePanel({
 
                     <button
                       onClick={handleSendCommand}
-                      disabled={!isConnected || !commandInput.trim()}
+                      disabled={!isConnected || (!commandInput.trim() && !attachedFile)}
                       className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
                     >
                       Send
