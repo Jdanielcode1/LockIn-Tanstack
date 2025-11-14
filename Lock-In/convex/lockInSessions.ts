@@ -16,6 +16,8 @@ export const create = mutation({
       v.literal("study"),
       v.literal("general")
     ),
+    claudeSandboxEnabled: v.optional(v.boolean()),
+    claudeRepository: v.optional(v.string()),
   },
   returns: v.object({
     sessionId: v.id("lockInSessions"),
@@ -32,6 +34,8 @@ export const create = mutation({
       maxParticipants: args.maxParticipants,
       aiAgentEnabled: args.aiAgentEnabled,
       sessionType: args.sessionType,
+      claudeSandboxEnabled: args.claudeSandboxEnabled || false,
+      claudeRepository: args.claudeRepository,
       createdAt: Date.now(),
     });
 
@@ -224,6 +228,10 @@ export const get = query({
         v.literal("study"),
         v.literal("general")
       ),
+      claudeSandboxEnabled: v.optional(v.boolean()),
+      claudeSandboxActive: v.optional(v.boolean()),
+      claudeSandboxId: v.optional(v.string()),
+      claudeRepository: v.optional(v.string()),
       createdAt: v.number(),
       creator: v.object({
         username: v.optional(v.string()),
@@ -445,5 +453,25 @@ export const toggleAIAgent = mutation({
     });
 
     return null;
+  },
+});
+
+/**
+ * Get a specific participant in a session
+ */
+export const getParticipant = query({
+  args: {
+    sessionId: v.id("lockInSessions"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const participant = await ctx.db
+      .query("sessionParticipants")
+      .withIndex("by_session_and_user", (q) =>
+        q.eq("sessionId", args.sessionId).eq("userId", args.userId)
+      )
+      .first();
+
+    return participant;
   },
 });

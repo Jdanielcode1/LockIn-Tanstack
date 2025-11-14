@@ -1,0 +1,30 @@
+name = "lock-in-claude-sandbox"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Enable observability for logs
+[observability]
+enabled = true
+
+# Durable Object bindings
+[[durable_objects.bindings]]
+name = "CLAUDE_SANDBOX"
+class_name = "ClaudeSandbox"
+
+[[durable_objects.bindings]]
+name = "Sandbox"
+class_name = "Sandbox"
+
+# Migrations for Durable Objects
+[[migrations]]
+tag = "v1"
+new_classes = ["ClaudeSandbox"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Sandbox"]
+
+# Environment variables (set via: wrangler secret put ANTHROPIC_API_KEY)
+[vars]
+# ANTHROPIC_API_KEY will be set as a secret

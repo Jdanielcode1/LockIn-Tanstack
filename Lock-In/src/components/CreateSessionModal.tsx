@@ -20,6 +20,8 @@ export function CreateSessionModal({ userId, onClose, defaultProjectId, onSessio
   const [sessionType, setSessionType] = useState<"coding" | "study" | "general">("coding");
   const [maxParticipants, setMaxParticipants] = useState(6);
   const [aiAgentEnabled, setAiAgentEnabled] = useState(true);
+  const [claudeSandboxEnabled, setClaudeSandboxEnabled] = useState(false);
+  const [claudeRepository, setClaudeRepository] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<Id<"projects"> | null>(defaultProjectId || null);
   const [scheduledTime, setScheduledTime] = useState(() => {
     // Default to now
@@ -53,6 +55,8 @@ export function CreateSessionModal({ userId, onClose, defaultProjectId, onSessio
         maxParticipants,
         aiAgentEnabled,
         sessionType,
+        claudeSandboxEnabled,
+        claudeRepository: claudeSandboxEnabled && claudeRepository ? claudeRepository : undefined,
       });
 
       // Success! Call callback to open session room
@@ -224,6 +228,62 @@ export function CreateSessionModal({ userId, onClose, defaultProjectId, onSessio
               />
               <div className="peer h-6 w-11 rounded-full bg-[#21262d] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-[#238636] peer-checked:after:translate-x-full peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#58a6ff]"></div>
             </label>
+          </div>
+
+          {/* Claude Code Assistant Toggle */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-md border border-[#30363d] bg-[#0d1117] p-4">
+              <div className="flex items-center gap-3">
+                <svg
+                  className="h-5 w-5 text-purple-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                  />
+                </svg>
+                <div>
+                  <div className="font-medium text-[#e6edf3]">Enable Claude Code Assistant</div>
+                  <div className="text-sm text-[#8b949e]">
+                    AI-powered coding sandbox with file operations
+                  </div>
+                </div>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  checked={claudeSandboxEnabled}
+                  onChange={(e) => setClaudeSandboxEnabled(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="peer h-6 w-11 rounded-full bg-[#21262d] after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-purple-600 peer-checked:after:translate-x-full peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500"></div>
+              </label>
+            </div>
+
+            {/* GitHub Repository Input (shown when Claude is enabled) */}
+            {claudeSandboxEnabled && (
+              <div className="ml-8">
+                <label htmlFor="claudeRepository" className="block text-sm font-medium text-[#e6edf3] mb-2">
+                  GitHub Repository (Optional)
+                </label>
+                <input
+                  id="claudeRepository"
+                  type="url"
+                  value={claudeRepository}
+                  onChange={(e) => setClaudeRepository(e.target.value)}
+                  placeholder="https://github.com/username/repo"
+                  className="w-full rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-2 text-[#e6edf3] placeholder-[#6e7681] focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <p className="text-xs text-[#8b949e] mt-1">
+                  Claude will clone this repository into the sandbox environment
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Submit */}

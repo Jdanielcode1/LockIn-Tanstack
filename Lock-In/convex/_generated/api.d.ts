@@ -14,6 +14,7 @@ import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
 import type * as autumn from "../autumn.js";
 import type * as challenges from "../challenges.js";
+import type * as claudeSandbox from "../claudeSandbox.js";
 import type * as clubs from "../clubs.js";
 import type * as follows from "../follows.js";
 import type * as http from "../http.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   authHelpers: typeof authHelpers;
   autumn: typeof autumn;
   challenges: typeof challenges;
+  claudeSandbox: typeof claudeSandbox;
   clubs: typeof clubs;
   follows: typeof follows;
   http: typeof http;

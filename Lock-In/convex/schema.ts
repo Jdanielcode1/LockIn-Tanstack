@@ -141,6 +141,11 @@ export default defineSchema({
       v.literal("study"),
       v.literal("general")
     ),
+    // Claude Code Sandbox integration
+    claudeSandboxEnabled: v.optional(v.boolean()), // Enable Claude Code for this session
+    claudeSandboxId: v.optional(v.string()), // Durable Object ID for the sandbox
+    claudeSandboxActive: v.optional(v.boolean()), // Is sandbox currently active
+    claudeRepository: v.optional(v.string()), // GitHub repo URL (if using repo mode)
     createdAt: v.number(),
   })
     .index("by_creator", ["creatorId"])
@@ -207,6 +212,23 @@ export default defineSchema({
     .index("by_club", ["clubId"])
     .index("by_user", ["userId"])
     .index("by_club_and_user", ["clubId", "userId"]),
+
+  // Claude Code Sandbox messages
+  claudeMessages: defineTable({
+    sessionId: v.id("lockInSessions"),
+    userId: v.id("users"),
+    messageType: v.union(
+      v.literal("command"),
+      v.literal("output"),
+      v.literal("error"),
+      v.literal("status")
+    ),
+    content: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_user", ["userId"])
+    .index("by_session_and_timestamp", ["sessionId", "timestamp"]),
 
   // Phase 6: Chunked parallel processing jobs
   processingJobs: defineTable({

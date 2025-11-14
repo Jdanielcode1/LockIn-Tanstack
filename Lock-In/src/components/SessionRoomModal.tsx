@@ -7,6 +7,7 @@ import { useUser } from './UserProvider'
 import { useState, useEffect, useRef } from 'react'
 import { useRealtimeKitClient, RealtimeKitProvider } from '@cloudflare/realtimekit-react'
 import { RtkMeeting } from '@cloudflare/realtimekit-react-ui'
+import { ClaudeCodePanel } from './ClaudeCodePanel'
 
 interface SessionRoomModalProps {
   sessionId: Id<'lockInSessions'>
@@ -66,7 +67,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
         try {
           console.log('Auto-joining active session as invited participant')
           const result = await addParticipantAction({
-            // userId removed - backend gets it from ctx.auth
+            userId: user._id,
             sessionId,
           })
 
@@ -340,7 +341,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     setIsStarting(true)
     try {
       const result = await initializeMeetingAction({
-        // userId removed - backend gets it from ctx.auth
+        userId: user._id,
         sessionId,
       })
 
@@ -653,6 +654,13 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const isCreator = user?._id === session.creatorId
   const sessionDate = new Date(session.scheduledStartTime)
   const isActive = session.status === 'active'
+
+  // Debug: Log Claude sandbox status
+  console.log('Claude Sandbox Status:', {
+    claudeSandboxEnabled: session.claudeSandboxEnabled,
+    claudeSandboxActive: session.claudeSandboxActive,
+    claudeRepository: session.claudeRepository,
+  })
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0d1117] overflow-y-auto">
@@ -975,6 +983,21 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
                     <li>• "Hey agent, give me a tip"</li>
                   </ul>
                 </div>
+              </div>
+            )}
+
+            {/* Claude Code Assistant */}
+            {session.claudeSandboxEnabled && user && (
+              <div className="rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden">
+                <ClaudeCodePanel
+                  sessionId={sessionId}
+                  userId={user._id}
+                  isCreator={isCreator}
+                  isModerator={false} // TODO: Add moderator support
+                  sandboxEnabled={session.claudeSandboxEnabled}
+                  sandboxActive={session.claudeSandboxActive || false}
+                  repository={session.claudeRepository}
+                />
               </div>
             )}
           </div>
