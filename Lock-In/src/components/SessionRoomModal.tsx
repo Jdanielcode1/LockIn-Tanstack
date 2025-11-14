@@ -668,11 +668,47 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
       <div className="border-b border-[#30363d] bg-[#161b22] sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-[#e6edf3]">{session.title}</h1>
-              <p className="text-sm text-[#8b949e] mt-1">
-                {sessionDate.toLocaleString()} • {session.sessionType} session
-              </p>
+            <div className="flex-1">
+              <div className="flex items-center gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-[#e6edf3]">{session.title}</h1>
+                  <p className="text-sm text-[#8b949e] mt-1">
+                    {sessionDate.toLocaleString()} • {session.sessionType} session
+                  </p>
+                </div>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    isActive
+                      ? 'bg-[#238636]/20 text-[#3fb950]'
+                      : session.status === 'scheduled'
+                      ? 'bg-[#58a6ff]/20 text-[#58a6ff]'
+                      : 'bg-[#6e7681]/20 text-[#8b949e]'
+                  }`}
+                >
+                  {session.status}
+                </span>
+              </div>
+              {session.description && (
+                <p className="text-sm text-[#8b949e] mt-2 max-w-2xl">{session.description}</p>
+              )}
+              {session.aiAgentEnabled && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-[#58a6ff]">
+                  <svg
+                    className="h-3 w-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                    />
+                  </svg>
+                  AI Assistant enabled
+                </div>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -692,47 +728,85 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Session Info */}
-            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-[#e6edf3]">About this session</h2>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    isActive
-                      ? 'bg-[#238636]/20 text-[#3fb950]'
-                      : session.status === 'scheduled'
-                      ? 'bg-[#58a6ff]/20 text-[#58a6ff]'
-                      : 'bg-[#6e7681]/20 text-[#8b949e]'
-                  }`}
-                >
-                  {session.status}
-                </span>
-              </div>
-              <p className="text-[#8b949e] whitespace-pre-wrap">{session.description}</p>
-
-              {session.aiAgentEnabled && (
-                <div className="mt-4 flex items-center gap-2 text-sm text-[#58a6ff]">
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                    />
+        {/* Top Info Bar - Compact horizontal layout */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* Invite Link - Compact */}
+          <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
+            <h3 className="text-sm font-semibold text-[#e6edf3] mb-2">Invite Others</h3>
+            <button
+              onClick={handleCopyInvite}
+              className="w-full px-3 py-2 bg-[#238636] text-white rounded-md hover:bg-[#2ea043] transition-colors text-sm font-medium flex items-center justify-center gap-2"
+            >
+              {copied ? (
+                <>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  AI Assistant enabled - Say "hey agent" for help
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copy Link
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Participants - Compact */}
+          <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
+            <h3 className="text-sm font-semibold text-[#e6edf3] mb-2">
+              Participants ({participants.length}/{session.maxParticipants})
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {participants.slice(0, 6).map((participant) => (
+                <div
+                  key={participant._id}
+                  className="h-8 w-8 rounded-full bg-[#21262d] flex items-center justify-center text-[#e6edf3] font-medium text-xs border border-[#30363d]"
+                  title={participant.user.username}
+                >
+                  {participant.user.username?.[0]?.toUpperCase() || '?'}
+                </div>
+              ))}
+              {participants.length > 6 && (
+                <div className="h-8 w-8 rounded-full bg-[#21262d] flex items-center justify-center text-[#8b949e] text-xs border border-[#30363d]">
+                  +{participants.length - 6}
                 </div>
               )}
             </div>
+          </div>
 
+          {/* Session Details - Compact */}
+          <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
+            <h3 className="text-sm font-semibold text-[#e6edf3] mb-2">Details</h3>
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-[#8b949e]">Host</span>
+                <span className="text-[#e6edf3]">{session.creator.username}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#8b949e]">Type</span>
+                <span className="text-[#e6edf3] capitalize">{session.sessionType}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#8b949e]">Time</span>
+                <span className="text-[#e6edf3]">
+                  {sessionDate.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Grid - Video on left, Claude Code on right */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* Video Content */}
+          <div className="space-y-6">
             {/* Video Meeting */}
             <div className="rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden relative">
               {!isActive ? (
@@ -858,109 +932,22 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Invite Link */}
-            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
-              <h3 className="text-sm font-semibold text-[#e6edf3] mb-3">Invite Others</h3>
-              <button
-                onClick={handleCopyInvite}
-                className="w-full px-4 py-2 bg-[#238636] text-white rounded-md hover:bg-[#2ea043] transition-colors text-sm font-medium flex items-center justify-center gap-2"
-              >
-                {copied ? (
-                  <>
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    Copy Invite Link
-                  </>
-                )}
-              </button>
-              <p className="text-xs text-[#8b949e] mt-2 text-center">
-                Share this link with others to join the session
-              </p>
-            </div>
-
-            {/* Participants */}
-            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
-              <h3 className="text-sm font-semibold text-[#e6edf3] mb-3">
-                Participants ({participants.length}/{session.maxParticipants})
-              </h3>
-              <div className="space-y-2">
-                {participants.map((participant) => (
-                  <div
-                    key={participant._id}
-                    className="flex items-center gap-3 p-2 rounded-md hover:bg-[#21262d] transition-colors"
-                  >
-                    <div className="h-8 w-8 rounded-full bg-[#21262d] flex items-center justify-center text-[#e6edf3] font-medium text-sm">
-                      {participant.user.username?.[0]?.toUpperCase() || '?'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-[#e6edf3] truncate">
-                        {participant.user.username}
-                        {participant.userId === session.creatorId && (
-                          <span className="ml-2 text-xs text-[#8b949e]">(host)</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-[#8b949e]">
-                        {participant.isActive ? (
-                          <span className="flex items-center gap-1">
-                            <span className="inline-block w-2 h-2 rounded-full bg-[#3fb950]"></span>
-                            Active
-                          </span>
-                        ) : (
-                          'Joined'
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+          {/* Right Sidebar - Claude Code Assistant (full height) */}
+          <div>
+            {session.claudeSandboxEnabled && user ? (
+              <div className="rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden h-full">
+                <ClaudeCodePanel
+                  sessionId={sessionId}
+                  userId={user._id}
+                  isCreator={isCreator}
+                  isModerator={false} // TODO: Add moderator support
+                  sandboxEnabled={session.claudeSandboxEnabled}
+                  sandboxActive={session.claudeSandboxActive || false}
+                  repository={session.claudeRepository}
+                />
               </div>
-            </div>
-
-            {/* Session Details */}
-            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
-              <h3 className="text-sm font-semibold text-[#e6edf3] mb-3">Details</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-[#8b949e]">Host</span>
-                  <span className="text-[#e6edf3]">{session.creator.username}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#8b949e]">Type</span>
-                  <span className="text-[#e6edf3] capitalize">{session.sessionType}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#8b949e]">Scheduled</span>
-                  <span className="text-[#e6edf3]">
-                    {sessionDate.toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#8b949e]">Max participants</span>
-                  <span className="text-[#e6edf3]">{session.maxParticipants}</span>
-                </div>
-                {session.projectTitle && (
-                  <div className="pt-2 border-t border-[#30363d]">
-                    <div className="text-[#8b949e] mb-1">Project</div>
-                    <div className="text-[#e6edf3] font-medium">{session.projectTitle}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* AI Agent Status */}
-            {session.aiAgentEnabled && (
+            ) : session.aiAgentEnabled ? (
+              /* Show AI Agent Status if Claude Sandbox not enabled */
               <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-[#e6edf3]">AI Assistant</h3>
@@ -984,20 +971,12 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
                   </ul>
                 </div>
               </div>
-            )}
-
-            {/* Claude Code Assistant */}
-            {session.claudeSandboxEnabled && user && (
-              <div className="rounded-lg border border-[#30363d] bg-[#161b22] overflow-hidden">
-                <ClaudeCodePanel
-                  sessionId={sessionId}
-                  userId={user._id}
-                  isCreator={isCreator}
-                  isModerator={false} // TODO: Add moderator support
-                  sandboxEnabled={session.claudeSandboxEnabled}
-                  sandboxActive={session.claudeSandboxActive || false}
-                  repository={session.claudeRepository}
-                />
+            ) : (
+              /* Empty state if no assistant enabled */
+              <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-6 text-center">
+                <p className="text-sm text-[#8b949e]">
+                  No AI assistant enabled for this session
+                </p>
               </div>
             )}
           </div>
