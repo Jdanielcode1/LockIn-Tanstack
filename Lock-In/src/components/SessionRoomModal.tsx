@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRealtimeKitClient, RealtimeKitProvider } from '@cloudflare/realtimekit-react'
 import { RtkMeeting } from '@cloudflare/realtimekit-react-ui'
 import { ClaudeCodePanel } from './ClaudeCodePanel'
+import { useClaudeSandbox } from '~/hooks/useClaudeSandbox'
 
 interface SessionRoomModalProps {
   sessionId: Id<'lockInSessions'>
@@ -24,6 +25,7 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
   const [copied, setCopied] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
+  const [isAnalyzingScreenshot, setIsAnalyzingScreenshot] = useState(false)
   const videoContainerRef = useRef<HTMLDivElement>(null)
   const meetingRef = useRef(meeting)
   const openaiConnectionRef = useRef(openaiConnection)
@@ -33,6 +35,13 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     convexQuery(api.lockInSessions.get, {
       sessionId,
     })
+  )
+
+  // Claude sandbox connection for screenshot analysis
+  const { sendCommand: sendClaudeCommand, isConnected: isClaudeConnected } = useClaudeSandbox(
+    sessionId,
+    user?._id || '',
+    session?.claudeSandboxEnabled && session?.claudeSandboxActive
   )
 
   // Fetch participants
@@ -591,6 +600,103 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
     }
   }
 
+  // Capture screenshot and send to Claude for analysis
+  const analyzeScreenshot = async () => {
+    if (!meeting || !videoContainerRef.current) {
+      console.error('No meeting or video container available')
+      return
+    }
+
+    if (!isClaudeConnected) {
+      alert('Claude Code Assistant is not connected. Please initialize the sandbox first.')
+      return
+    }
+
+    setIsAnalyzingScreenshot(true)
+
+    try {
+      console.log('Capturing screenshot for Claude analysis...')
+
+      // Try to find screen share track (same logic as captureScreenshot)
+      const self = (meeting as any).self
+      const participants = (meeting as any).participants
+
+      let screenShareTrack = null
+      if (self.screenShareEnabled && self.screenShareTracks?.video) {
+        screenShareTrack = self.screenShareTracks.video
+      }
+
+      if (!screenShareTrack && participants) {
+        for (const participant of Object.values(participants)) {
+          const p = participant as any
+          if (p.screenShareEnabled && p.screenShareTracks?.video) {
+            screenShareTrack = p.screenShareTracks.video
+            break
+          }
+        }
+      }
+
+      const videoTrack = screenShareTrack || self.videoTrack
+
+      if (!videoTrack) {
+        throw new Error('No video source found for screenshot')
+      }
+
+      // Create a temporary video element to render the track
+      const video = document.createElement('video')
+      video.autoplay = true
+      video.playsInline = true
+      video.muted = true
+
+      const stream = new MediaStream([videoTrack])
+      video.srcObject = stream
+
+      // Wait for video to be ready
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Video load timeout')), 5000)
+        video.onloadedmetadata = () => {
+          clearTimeout(timeout)
+          video.play()
+          setTimeout(resolve, 100)
+        }
+      })
+
+      // Create canvas and capture the frame
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.min(video.videoWidth || 1280, 1920) // Max width 1920px
+      canvas.height = Math.min(video.videoHeight || 720, 1080) // Max height 1080px
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        throw new Error('Could not get canvas context')
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      // Clean up
+      video.srcObject = null
+
+      // Convert to base64 (resize to ~1.15MP per Claude recommendations)
+      const base64Data = canvas.toDataURL('image/jpeg', 0.85).split(',')[1]
+
+      console.log('Sending screenshot to Claude for analysis...')
+
+      // Send to Claude with image
+      sendClaudeCommand(
+        'Please analyze this screenshot. What do you see? If there is code visible, provide feedback on code quality, potential issues, and suggestions for improvement.',
+        base64Data,
+        'image/jpeg'
+      )
+
+      console.log('Screenshot sent to Claude successfully!')
+    } catch (error) {
+      console.error('Error analyzing screenshot:', error)
+      alert(`Failed to analyze screenshot: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsAnalyzingScreenshot(false)
+    }
+  }
+
   // Listen for fullscreen changes (user pressing ESC)
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -892,26 +998,51 @@ export function SessionRoomModal({ sessionId, onClose }: SessionRoomModalProps) 
 
             {/* Controls */}
             <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={captureScreenshot}
-                disabled={!isActive || isCapturingScreenshot}
-                className="px-4 py-2 rounded-md border border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff]/10 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isCapturingScreenshot ? (
-                  <>
-                    <div className="animate-spin text-base">⏳</div>
-                    Capturing...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Capture Screenshot
-                  </>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={captureScreenshot}
+                  disabled={!isActive || isCapturingScreenshot}
+                  className="px-4 py-2 rounded-md border border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff]/10 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCapturingScreenshot ? (
+                    <>
+                      <div className="animate-spin text-base">⏳</div>
+                      Capturing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Capture Screenshot
+                    </>
+                  )}
+                </button>
+
+                {session?.claudeSandboxEnabled && (
+                  <button
+                    onClick={analyzeScreenshot}
+                    disabled={!isActive || isAnalyzingScreenshot || !isClaudeConnected}
+                    className="px-4 py-2 rounded-md border border-[#a371f7] text-[#a371f7] hover:bg-[#a371f7]/10 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={!isClaudeConnected ? 'Claude sandbox not connected' : 'Ask Claude to analyze screenshot'}
+                  >
+                    {isAnalyzingScreenshot ? (
+                      <>
+                        <div className="animate-spin text-base">⏳</div>
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        Analyze with Claude
+                      </>
+                    )}
+                  </button>
                 )}
-              </button>
+              </div>
 
               <div className="flex items-center gap-3">
                 <button

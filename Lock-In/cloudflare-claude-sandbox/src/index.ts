@@ -25,6 +25,8 @@ interface ClaudeMessage {
   content: string;
   timestamp: number;
   userId?: string;
+  imageBase64?: string; // Base64-encoded JPEG image for vision API
+  imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 }
 
 interface BashTool {
@@ -259,7 +261,7 @@ export class ClaudeSandbox implements DurableObject {
         const data = JSON.parse(event.data as string);
 
         if (data.type === 'command') {
-          await this.executeCommand(data.content, data.userId);
+          await this.executeCommand(data.content, data.userId, data.imageBase64, data.imageMediaType);
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
@@ -429,13 +431,15 @@ if result.returncode != 0:
     });
   }
 
-  private async executeCommand(command: string, userId?: string): Promise<any> {
+  private async executeCommand(command: string, userId?: string, imageBase64?: string, imageMediaType?: string): Promise<any> {
     // Add command to history
     const commandMessage: ClaudeMessage = {
       type: 'command',
       content: command,
       timestamp: Date.now(),
-      userId
+      userId,
+      imageBase64,
+      imageMediaType: imageMediaType as any
     };
     this.commandHistory.push(commandMessage);
     this.broadcast(commandMessage);
@@ -453,7 +457,7 @@ if result.returncode != 0:
 
     try {
       // Use Claude with custom tools
-      const claudeResponse = await this.callClaudeWithTools(command);
+      const claudeResponse = await this.callClaudeWithTools(command, imageBase64, imageMediaType);
 
       return {
         success: true,
@@ -476,16 +480,38 @@ if result.returncode != 0:
     }
   }
 
-  private async callClaudeWithTools(userCommand: string): Promise<string> {
+  private async callClaudeWithTools(userCommand: string, imageBase64?: string, imageMediaType?: string): Promise<string> {
     try {
       let fullResponse = '';
       const conversationHistory: Anthropic.MessageParam[] = [];
 
-      // Add user message
-      conversationHistory.push({
-        role: 'user',
-        content: userCommand
-      });
+      // Add user message with optional image
+      if (imageBase64 && imageMediaType) {
+        // Message with image (vision API)
+        conversationHistory.push({
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: userCommand
+            },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: imageMediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                data: imageBase64
+              }
+            }
+          ]
+        });
+      } else {
+        // Text-only message
+        conversationHistory.push({
+          role: 'user',
+          content: userCommand
+        });
+      }
 
       // Define tools for Claude
       const tools: Anthropic.Tool[] = [

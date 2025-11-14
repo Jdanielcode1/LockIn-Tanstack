@@ -3,7 +3,7 @@ import type { ClaudeMessage } from '~/types/claude';
 
 interface ClaudeSandboxHook {
   messages: ClaudeMessage[];
-  sendCommand: (command: string) => void;
+  sendCommand: (command: string, imageBase64?: string, imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') => void;
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
@@ -138,7 +138,7 @@ export function useClaudeSandbox(
   }, []);
 
   const sendCommand = useCallback(
-    (command: string) => {
+    (command: string, imageBase64?: string, imageMediaType?: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp') => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         setError('Not connected to sandbox');
         return;
@@ -149,10 +149,12 @@ export function useClaudeSandbox(
       }
 
       try {
-        const message = {
+        const message: ClaudeMessage = {
           type: 'command',
           content: command,
           userId,
+          imageBase64,
+          imageMediaType: imageMediaType || 'image/jpeg',
         };
 
         wsRef.current.send(JSON.stringify(message));
