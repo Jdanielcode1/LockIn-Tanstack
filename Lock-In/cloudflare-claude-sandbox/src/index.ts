@@ -7,11 +7,11 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { getSandbox, proxyToSandbox } from '@cloudflare/sandbox';
+import { getSandbox, proxyToSandbox, Sandbox } from '@cloudflare/sandbox';
 import Anthropic from '@anthropic-ai/sdk';
 
 // Re-export Sandbox from SDK
-export { Sandbox } from '@cloudflare/sandbox';
+export { Sandbox };
 
 // Types
 export interface Env {
@@ -286,15 +286,8 @@ export class ClaudeSandbox implements DurableObject {
     try {
       const body = await request.json() as { repository?: string; task?: string };
 
-      // Get Cloudflare Sandbox instance
+      // Get Cloudflare Sandbox instance using SDK
       this.sandbox = getSandbox(this.env.Sandbox, `session-${Date.now()}`);
-
-      // Set environment variables if needed
-      if (this.apiKey) {
-        await this.sandbox.setEnvVars({
-          ANTHROPIC_API_KEY: this.apiKey
-        });
-      }
 
       this.repository = body.repository || null;
       this.isActive = true;
@@ -315,24 +308,38 @@ export class ClaudeSandbox implements DurableObject {
         this.broadcast(statusMsg);
 
         try {
-          // Use runCode for better compatibility
-          const mkdirResult = await this.sandbox.runCode(
-            `import subprocess; subprocess.run(['mkdir', '-p', '/workspace'], check=True)`,
-            { language: 'python' }
-          );
+          // Create workspace directory using SDK mkdir
+          await this.sandbox.mkdir('/workspace', { recursive: true });
 
-          const cloneResult = await this.sandbox.runCode(
-            `import subprocess; result = subprocess.run(['git', 'clone', '${this.repository}', '/workspace/repo'], capture_output=True, text=True); print(result.stdout)`,
-            { language: 'python' }
-          );
+          // Clone repository using Python subprocess
+          const cloneScript = `
+import subprocess
+result = subprocess.run(
+    ['git', 'clone', '${this.repository}', '/workspace/repo'],
+    capture_output=True,
+    text=True
+)
+print(result.stdout)
+if result.returncode != 0:
+    print(f"ERROR: {result.stderr}")
+`;
 
-          const successMsg: ClaudeMessage = {
-            type: 'output',
-            content: `Repository cloned successfully!\n${cloneResult.logs.stdout.join('\n')}`,
-            timestamp: Date.now()
-          };
-          this.commandHistory.push(successMsg);
-          this.broadcast(successMsg);
+          const ctx = await this.sandbox.createCodeContext({ language: 'python' });
+          const cloneResult = await this.sandbox.runCode(cloneScript, { context: ctx });
+
+          const output = cloneResult.logs?.join('\n') || '';
+
+          if (!output.includes('ERROR:')) {
+            const successMsg: ClaudeMessage = {
+              type: 'output',
+              content: `Repository cloned successfully!\n${output}`,
+              timestamp: Date.now()
+            };
+            this.commandHistory.push(successMsg);
+            this.broadcast(successMsg);
+          } else {
+            throw new Error(output);
+          }
         } catch (error) {
           const errorMsg: ClaudeMessage = {
             type: 'error',
@@ -588,10 +595,13 @@ Be helpful, concise, and actionable. Execute commands in the sandbox when approp
             // Execute tool
             const toolResult = await this.executeTool(block.name, block.input);
 
+            // Ensure toolResult is a string
+            const toolResultStr = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
+
             // Send result to clients
             const resultMsg: ClaudeMessage = {
               type: 'output',
-              content: `Result: ${toolResult.substring(0, 1000)}${toolResult.length > 1000 ? '...' : ''}`,
+              content: `Result: ${toolResultStr.substring(0, 1000)}${toolResultStr.length > 1000 ? '...' : ''}`,
               timestamp: Date.now()
             };
             this.commandHistory.push(resultMsg);
@@ -600,7 +610,7 @@ Be helpful, concise, and actionable. Execute commands in the sandbox when approp
             toolResults.push({
               type: 'tool_result',
               tool_use_id: block.id,
-              content: toolResult
+              content: toolResultStr
             });
           }
         }
@@ -633,67 +643,66 @@ Be helpful, concise, and actionable. Execute commands in the sandbox when approp
     try {
       switch (toolName) {
         case 'bash': {
-          // Use Python subprocess to run bash commands
-          const code = `
+          // For bash commands, we need to use a Python or Node.js subprocess
+          // Create a temporary Python script to execute the command
+          const scriptPath = `/tmp/cmd_${Date.now()}.py`;
+          const pythonScript = `
 import subprocess
-import json
+import sys
 
-result = subprocess.run(
-    ${JSON.stringify(input.command)},
-    shell=True,
-    capture_output=True,
-    text=True,
-    cwd=${JSON.stringify(this.workingDirectory)}
-)
+result = subprocess.run(${JSON.stringify(input.command)},
+                       shell=True,
+                       capture_output=True,
+                       text=True,
+                       cwd=${JSON.stringify(this.workingDirectory)})
 
-output = {
-    "stdout": result.stdout,
-    "stderr": result.stderr,
-    "exit_code": result.returncode
-}
-print(json.dumps(output))
-output
+print("STDOUT:", result.stdout)
+print("STDERR:", result.stderr)
+print("EXIT_CODE:", result.returncode)
 `;
-          const result = await this.sandbox.runCode(code, { language: 'python' });
 
-          if (result.error) {
-            return `Error executing command: ${result.error.value}`;
+          // Write the script
+          await this.sandbox.writeFile(scriptPath, pythonScript);
+
+          // Execute it using runCode with Python context
+          const ctx = await this.sandbox.createCodeContext({ language: 'python' });
+          const execResult = await this.sandbox.runCode(
+            `exec(open('${scriptPath}').read())`,
+            { context: ctx }
+          );
+
+          // Parse the output - logs might be an array or string
+          let output = '';
+          if (Array.isArray(execResult.logs)) {
+            output = execResult.logs.join('\n');
+          } else if (typeof execResult.logs === 'string') {
+            output = execResult.logs;
+          } else if (execResult.logs) {
+            output = JSON.stringify(execResult.logs);
           }
 
-          // Parse the JSON output
-          const output = result.results[0]?.text ? JSON.parse(result.results[0].text) : { stdout: '', stderr: '', exit_code: 1 };
-          return `stdout:\n${output.stdout}\n\nstderr:\n${output.stderr}\n\nexit code: ${output.exit_code}`;
+          return `Output:\n${output}`;
         }
 
         case 'read_file': {
-          const code = `
-with open(${JSON.stringify(input.path)}, 'r') as f:
-    content = f.read()
-content
-`;
-          const result = await this.sandbox.runCode(code, { language: 'python' });
-
-          if (result.error) {
-            return `Error reading file: ${result.error.value}`;
+          // Use SDK's readFile method
+          try {
+            const content = await this.sandbox.readFile(input.path);
+            // Ensure content is a string
+            return typeof content === 'string' ? content : JSON.stringify(content);
+          } catch (error) {
+            return `Error reading file: ${error instanceof Error ? error.message : 'Unknown error'}`;
           }
-
-          return result.results[0]?.text || '';
         }
 
         case 'write_file': {
-          const code = `
-content = ${JSON.stringify(input.content)}
-with open(${JSON.stringify(input.path)}, 'w') as f:
-    f.write(content)
-f"File written successfully to {${JSON.stringify(input.path)}}"
-`;
-          const result = await this.sandbox.runCode(code, { language: 'python' });
-
-          if (result.error) {
-            return `Error writing file: ${result.error.value}`;
+          // Use SDK's writeFile method
+          try {
+            await this.sandbox.writeFile(input.path, input.content);
+            return `File written successfully to ${input.path}`;
+          } catch (error) {
+            return `Error writing file: ${error instanceof Error ? error.message : 'Unknown error'}`;
           }
-
-          return result.results[0]?.text || `File written successfully to ${input.path}`;
         }
 
         default:

@@ -41,10 +41,19 @@ export function ClaudeCodePanel({
   // Initialize mutation state
   const initMutation = useMutation({
     mutationFn: async () => {
-      return await initializeSandboxAction({
+      console.log('[ClaudeCodePanel] Initializing sandbox...', { sessionId, repository });
+      const result = await initializeSandboxAction({
         sessionId,
         repository: repository || undefined,
       });
+      console.log('[ClaudeCodePanel] Initialize result:', result);
+      return result;
+    },
+    onSuccess: (data) => {
+      console.log('[ClaudeCodePanel] Initialize success:', data);
+    },
+    onError: (error) => {
+      console.error('[ClaudeCodePanel] Initialize error:', error);
     },
   });
 
